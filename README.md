@@ -19,7 +19,7 @@
 
 Download and install the latest production release directly on your Android device:
 
-[![Download APK](https://img.shields.io/badge/⚡_Download_Latest_APK-v7.1.0-8B5CF6?style=for-the-badge&logo=android&logoColor=white)](https://github.com/cyugandharreddy08/attendo/releases/download/v7.1.0/Attendo_v7.1.0.apk)
+[![Download APK](https://img.shields.io/badge/⚡_Download_Latest_APK-v7.2.0-8B5CF6?style=for-the-badge&logo=android&logoColor=white)](https://github.com/cyugandharreddy08/attendo/releases/download/v7.2.0/Attendo_v7.2.0.apk)
 
 > **Compatibility**: Android 7.0 (Nougat, API 24) and above.  
 > **Package**: `com.tracker75` | **Architecture**: Universal APK (ARM64, ARMv7, x86_64).
