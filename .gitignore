@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+npm-debug.log
+yarn-error.log
+yarn-debug.log
+
+# Android Build Outputs
+.gradle/
+android/.gradle/
+android/app/build/
+android/build/
+android/app/release/
+*.apk
+*.aab
+
+# Local Configuration
+local.properties
+android/local.properties
+.env
+.env.local
+.env.*.local
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*.orig.*
+*.lnk
+
+# Crash & System Logs
+*.log
+hs_err_pid*.log
+replay_pid*.log
+
+# Keystores (preserve debug keystore for quick testing)
+*.keystore
+!debug.keystore
+
+# Metro / Buck
+.buckd
+buck-out
+.metro-health-check*
