@@ -99,6 +99,36 @@ export interface TodoItem {
   subject?: Subject; // joined
 }
 
+export interface AttendanceActivityDay {
+  date: string; // 'YYYY-MM-DD'
+  count: number; // classes attended
+  hours: number; // hours attended
+  level: 0 | 1 | 2 | 3 | 4; // intensity level for LeetCode heatmap
+}
+
+export interface StudentProfile {
+  id: string;
+  phone: string;
+  username: string;
+  full_name: string;
+  college: string;
+  academic_year: string; // e.g. '1st Year', '2nd Year', '3rd Year', '4th Year'
+  branch?: string;
+  overall_percent: number;
+  theory_percent: number;
+  lab_percent: number;
+  current_streak: number;
+  longest_streak: number;
+  total_attended_hours: number;
+  total_held_hours: number;
+  active_days_count: number;
+  activity_matrix: AttendanceActivityDay[];
+  badges: string[];
+  is_public: boolean;
+  updated_at?: string;
+  last_active_at?: string;
+}
+
 export type RootStackParamList = {
   MainTabs: undefined;
   SubjectDetail: {subjectId: number; subjectName: string};
@@ -108,11 +138,16 @@ export type RootStackParamList = {
   BugReport: undefined;
   MyBugs: undefined;
   Changelog: undefined;
+  PhoneAuth: {onSuccess?: () => void} | undefined;
+  StudentSearch: {initialCollege?: string} | undefined;
+  PublicProfile: {profile?: StudentProfile; username?: string; profileId?: string};
+  CalendarHeatmap: undefined;
 };
 
 export type BottomTabParamList = {
   Timetable: undefined;
   Todos: undefined;
+  Peers: undefined;
   Stats: undefined;
   Calendar: undefined;
   Settings: undefined;

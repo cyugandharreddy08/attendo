@@ -17,6 +17,9 @@ import TodoListScreen from '../screens/TodoListScreen';
 import BugReportScreen from '../screens/BugReportScreen';
 import MyBugsScreen from '../screens/MyBugsScreen';
 import ChangelogScreen from '../screens/ChangelogScreen';
+import StudentSearchScreen from '../screens/StudentSearchScreen';
+import PublicProfileScreen from '../screens/PublicProfileScreen';
+import PhoneAuthScreen from '../screens/PhoneAuthScreen';
 import {RootStackParamList, BottomTabParamList} from '../types';
 
 const Tab = createBottomTabNavigator<BottomTabParamList>();
@@ -25,6 +28,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 const tabIcons: Record<string, string> = {
   Timetable: '📅',
   Todos: '📝',
+  Peers: '👥',
   Stats: '📊',
   Calendar: '🗓️',
   Settings: '⚙️',
@@ -64,6 +68,7 @@ function MainTabs() {
       })}>
       <Tab.Screen name="Timetable" component={TimetableScreen} />
       <Tab.Screen name="Todos" component={TodoListScreen} options={{title: 'To-Do'}} />
+      <Tab.Screen name="Peers" component={StudentSearchScreen} options={{title: 'Campus'}} />
       <Tab.Screen name="Stats" component={StatsStack} />
       <Tab.Screen name="Calendar" component={CalendarHeatmapScreen} />
       <Tab.Screen name="Settings" component={SettingsScreen} />
@@ -110,6 +115,26 @@ export default function AppNavigator() {
         component={ChangelogScreen}
         options={{animation: 'slide_from_right'}}
       />
+      <Stack.Screen
+        name="PhoneAuth"
+        component={PhoneAuthScreen}
+        options={{animation: 'slide_from_bottom', presentation: 'modal'}}
+      />
+      <Stack.Screen
+        name="StudentSearch"
+        component={StudentSearchScreen}
+        options={{animation: 'slide_from_right'}}
+      />
+      <Stack.Screen
+        name="PublicProfile"
+        component={PublicProfileScreen}
+        options={{animation: 'slide_from_right'}}
+      />
+      <Stack.Screen
+        name="CalendarHeatmap"
+        component={CalendarHeatmapScreen}
+        options={{animation: 'slide_from_right'}}
+      />
     </Stack.Navigator>
   );
 }
@@ -124,12 +149,12 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   tabBarLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
   },
   tabIconContainer: {
-    width: 36,
-    height: 28,
+    width: 32,
+    height: 26,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 8,
@@ -138,6 +163,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary + '22',
   },
   tabIconEmoji: {
-    fontSize: 20,
+    fontSize: 18,
   },
 });

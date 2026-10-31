@@ -89,6 +89,21 @@ $$\text{Attendance } \% = \frac{\sum \text{Hours Attended}}{\sum \text{Total Cla
 
 ---
 
+### 📱 10. Phone Authentication & Verified Campus Profile
+- **Mobile Number Login**: Simple phone OTP verification connected directly to your Supabase Cloud profile.
+- **Institute & Academic Year Identity**: Set your username (`@handle`), college name, and academic year (`1st Year`, `2nd Year`, `3rd Year`, `4th Year`).
+- **Campus Directory & Peer Discovery**: Search and discover students from your institute or any college across the country. View peer rankings, overall attendance percentages, and streak milestones.
+
+---
+
+### 🔥 11. LeetCode-Style Attendance Streaks & Heatmap
+- **Daily Consistency Matrix**: Visual 7×N contribution graph showing daily attendance density with 5 green intensity levels just like GitHub & LeetCode.
+- **Streak Tracker**: Automatic calculation of current active daily streak and all-time maximum streak.
+- **Campus Badges & Achievements**: Unlock awards including *Hatching Flame*, *Ironclad Regular*, *Lab Prodigy*, and *Distinction 90%*.
+- **Public Profile Sharing**: Share your live profile and streak scorecard with classmates and friends in one tap.
+
+---
+
 ## 🏗️ Technology Stack
 
 | Component | Technology |

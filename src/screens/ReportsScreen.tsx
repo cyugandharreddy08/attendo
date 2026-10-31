@@ -7,10 +7,11 @@ import {
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useIsFocused} from '@react-navigation/native';
-import {Subject, AttendanceStats} from '../types';
+import {Subject, AttendanceStats, AttendanceActivityDay} from '../types';
 import {getAllSubjects} from '../db/queries/subjects';
-import {getAttendanceStats} from '../db/queries/lectureInstances';
+import {getAttendanceStats, getUserAttendanceActivityReport} from '../db/queries/lectureInstances';
 import CircularProgress from '../components/CircularProgress';
+import LeetCodeAttendanceHeatmap from '../components/LeetCodeAttendanceHeatmap';
 import {Colors} from '../theme/colors';
 import {Spacing} from '../theme/spacing';
 import {Typography} from '../theme/typography';
@@ -36,9 +37,19 @@ export default function ReportsScreen() {
   const isFocused = useIsFocused();
   const [reports, setReports] = useState<SubjectReport[]>([]);
   const [overall, setOverall] = useState<AttendanceStats | null>(null);
+  const [activityReport, setActivityReport] = useState<{
+    currentStreak: number;
+    longestStreak: number;
+    activeDaysCount: number;
+    activityMatrix: AttendanceActivityDay[];
+  } | null>(null);
 
   const loadData = useCallback(async () => {
-    const subjects = await getAllSubjects();
+    const [subjects, act] = await Promise.all([
+      getAllSubjects(),
+      getUserAttendanceActivityReport(),
+    ]);
+    setActivityReport(act);
     const reps: SubjectReport[] = [];
     let totalTotal = 0, totalAttended = 0;
     for (const sub of subjects) {
@@ -126,6 +137,18 @@ export default function ReportsScreen() {
               </>
             );
           })()}
+        </View>
+      )}
+
+      {/* LeetCode-Style Attendance Consistency Heatmap */}
+      {activityReport && (
+        <View style={{paddingHorizontal: Spacing.screenPad}}>
+          <LeetCodeAttendanceHeatmap
+            activityMatrix={activityReport.activityMatrix}
+            currentStreak={activityReport.currentStreak}
+            longestStreak={activityReport.longestStreak}
+            activeDaysCount={activityReport.activeDaysCount}
+          />
         </View>
       )}
 

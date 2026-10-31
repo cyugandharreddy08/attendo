@@ -1,5 +1,5 @@
 import {format, parseISO, isToday, startOfWeek, endOfWeek, eachDayOfInterval} from 'date-fns';
-import {LectureInstance, AttendanceStatus, AttendanceStats} from '../../types';
+import {LectureInstance, AttendanceStatus, AttendanceStats, AttendanceActivityDay} from '../../types';
 import {executeSql, rowsToArray, executeInTransaction} from '../database';
 import {appendEditHistory} from './editHistory';
 import {getSubjectById} from './subjects';
@@ -633,4 +633,160 @@ export async function getOverallStreak(): Promise<number> {
     }
   }
   return streak;
+}
+
+export async function getUserAttendanceActivityReport(): Promise<{
+  overallPercent: number;
+  theoryPercent: number;
+  labPercent: number;
+  currentStreak: number;
+  longestStreak: number;
+  totalAttendedHours: number;
+  totalHeldHours: number;
+  activeDaysCount: number;
+  activityMatrix: AttendanceActivityDay[];
+  badges: string[];
+}> {
+  // 1. Get subjects to split theory vs lab
+  const subRes = await executeSql('SELECT id, subject_type FROM subjects WHERE is_frozen = 0');
+  const subs = rowsToArray<{id: number; subject_type: string}>(subRes);
+  const subjectTypeMap = new Map<number, string>();
+  subs.forEach(s => subjectTypeMap.set(s.id, s.subject_type || 'theory'));
+
+  // 2. Fetch all marked instances
+  const instRes = await executeSql(`
+    SELECT subject_id, date, start_time, end_time, status
+    FROM lecture_instances
+    WHERE status IS NOT NULL
+    ORDER BY date ASC, start_time ASC
+  `);
+  const instRows = rowsToArray<{
+    subject_id: number;
+    date: string;
+    start_time: string;
+    end_time: string;
+    status: string;
+  }>(instRes);
+
+  let totalAttendedHours = 0;
+  let totalHeldHours = 0;
+  let theoryAttendedHours = 0;
+  let theoryHeldHours = 0;
+  let labAttendedHours = 0;
+  let labHeldHours = 0;
+
+  // Day grouping for LeetCode activity matrix
+  const dayMap = new Map<string, {presentCount: number; totalCount: number; presentHours: number}>();
+
+  for (const inst of instRows) {
+    const hours = calculateDurationHours(inst.start_time, inst.end_time);
+    const isLab = subjectTypeMap.get(inst.subject_id) === 'lab';
+
+    if (!dayMap.has(inst.date)) {
+      dayMap.set(inst.date, {presentCount: 0, totalCount: 0, presentHours: 0});
+    }
+    const dayData = dayMap.get(inst.date)!;
+
+    if (inst.status === 'present') {
+      totalAttendedHours += hours;
+      totalHeldHours += hours;
+      dayData.presentCount += 1;
+      dayData.presentHours += hours;
+      dayData.totalCount += 1;
+
+      if (isLab) {
+        labAttendedHours += hours;
+        labHeldHours += hours;
+      } else {
+        theoryAttendedHours += hours;
+        theoryHeldHours += hours;
+      }
+    } else if (inst.status === 'absent') {
+      totalHeldHours += hours;
+      dayData.totalCount += 1;
+
+      if (isLab) {
+        labHeldHours += hours;
+      } else {
+        theoryHeldHours += hours;
+      }
+    }
+  }
+
+  // Build sorted activity matrix
+  const sortedDates = Array.from(dayMap.keys()).sort();
+  const activityMatrix: AttendanceActivityDay[] = sortedDates.map(date => {
+    const d = dayMap.get(date)!;
+    let level: 0 | 1 | 2 | 3 | 4 = 0;
+    if (d.presentCount >= 4) level = 4;
+    else if (d.presentCount === 3) level = 3;
+    else if (d.presentCount === 2) level = 2;
+    else if (d.presentCount === 1) level = 1;
+    else level = 0;
+
+    return {
+      date,
+      count: d.presentCount,
+      hours: Math.round(d.presentHours * 10) / 10,
+      level,
+    };
+  });
+
+  // Calculate day-based streaks
+  let currentStreak = 0;
+  let longestStreak = 0;
+  let tempStreak = 0;
+
+  for (const date of sortedDates) {
+    const day = dayMap.get(date)!;
+    if (day.presentCount > 0) {
+      tempStreak++;
+      if (tempStreak > longestStreak) {
+        longestStreak = tempStreak;
+      }
+    } else {
+      tempStreak = 0;
+    }
+  }
+
+  // Current streak (counting backwards from most recent active date)
+  for (let i = sortedDates.length - 1; i >= 0; i--) {
+    const day = dayMap.get(sortedDates[i])!;
+    if (day.presentCount > 0) {
+      currentStreak++;
+    } else {
+      break;
+    }
+  }
+
+  // Active days count (days with >= 1 present class)
+  const activeDaysCount = activityMatrix.filter(a => a.count > 0).length;
+
+  const overallPercent = totalHeldHours > 0 ? Math.round((totalAttendedHours / totalHeldHours) * 100) : 0;
+  const theoryPercent = theoryHeldHours > 0 ? Math.round((theoryAttendedHours / theoryHeldHours) * 100) : 0;
+  const labPercent = labHeldHours > 0 ? Math.round((labAttendedHours / labHeldHours) * 100) : 0;
+
+  // Unlocked badges
+  const badges: string[] = [];
+  if (currentStreak >= 3 || longestStreak >= 3) badges.push('🔥 3-Day Flame');
+  if (currentStreak >= 7 || longestStreak >= 7) badges.push('⚡ 7-Day Unstoppable');
+  if (currentStreak >= 15 || longestStreak >= 15) badges.push('🛡️ 15-Day Regular');
+  if (currentStreak >= 30 || longestStreak >= 30) badges.push('👑 30-Day Master');
+  if (overallPercent >= 75 && totalHeldHours > 0) badges.push('🎯 75% Safe Haven');
+  if (overallPercent >= 90 && totalHeldHours > 0) badges.push('🏆 90% Distinction');
+  if (labPercent >= 85 && labHeldHours > 0) badges.push('🧪 Lab Prodigy');
+  if (totalAttendedHours >= 50) badges.push('⏳ 50+ Hours Attended');
+
+  return {
+    overallPercent,
+    theoryPercent,
+    labPercent,
+    currentStreak,
+    longestStreak,
+    totalAttendedHours: Math.round(totalAttendedHours * 10) / 10,
+    totalHeldHours: Math.round(totalHeldHours * 10) / 10,
+    activeDaysCount,
+    activityMatrix,
+    badges,
+  };
 }

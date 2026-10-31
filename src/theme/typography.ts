@@ -24,6 +24,11 @@ export const Typography = StyleSheet.create({
     fontWeight: '600',
     color: Colors.textPrimary,
   },
+  subtitle1: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
   body1: {
     fontSize: 15,
     fontWeight: '400',

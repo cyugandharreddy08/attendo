@@ -1,5 +1,6 @@
 import React from 'react';
 import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
+import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import {Colors} from '../theme/colors';
 import {Spacing} from '../theme/spacing';
 import {Typography} from '../theme/typography';
@@ -28,31 +29,41 @@ export default function HeroDashboardCard({
     ? Colors.absent
     : Colors.present;
 
+  const handlePress = () => {
+    ReactNativeHapticFeedback.trigger('impactLight', {
+      enableVibrateFallback: true,
+      ignoreAndroidSystemSettings: false,
+    });
+    if (onPressStats) onPressStats();
+  };
+
   return (
     <TouchableOpacity
       style={[
         styles.card,
         {borderColor: statusColor + '44'},
       ]}
-      onPress={onPressStats}
+      onPress={handlePress}
       activeOpacity={0.85}>
       <View style={styles.topRow}>
         <View style={styles.badgeContainer}>
           <View style={[styles.statusDot, {backgroundColor: statusColor}]} />
           <Text style={[styles.statusText, {color: statusColor}]}>
             {!hasClasses
-              ? '📅 No Classes Recorded'
+              ? '📅 Schedule Ready'
               : isInDanger
-              ? '⚠️ Danger Zone'
-              : '🎯 Target On Track'}
+              ? '⚠️ Below 75% Target'
+              : '🎯 75%+ Safe Haven'}
           </Text>
         </View>
-        <Text style={styles.streakBadge}>🔥 {streakCount} Streak</Text>
+        <View style={styles.streakBadge}>
+          <Text style={styles.streakBadgeText}>🔥 {streakCount}d Streak</Text>
+        </View>
       </View>
 
       <View style={styles.metricRow}>
         <View>
-          <Text style={styles.percentText}>
+          <Text style={[styles.percentText, {color: statusColor}]}>
             {hasClasses ? `${totalPercent}%` : '--%'}
           </Text>
           <Text style={styles.percentLabel}>Overall Attendance</Text>
@@ -61,16 +72,16 @@ export default function HeroDashboardCard({
         <View style={styles.divider} />
 
         <View style={{flex: 1, alignItems: 'flex-end'}}>
-          <View style={styles.bunkPill}>
-            <Text style={styles.bunkPillText}>
+          <View style={[styles.bunkPill, maxBunkable > 0 && styles.bunkPillSafe]}>
+            <Text style={[styles.bunkPillText, maxBunkable > 0 && styles.bunkPillTextSafe]}>
               {!hasClasses
                 ? '+ Add class to calculate'
                 : maxBunkable > 0
-                ? `✨ Can bunk ${maxBunkable} more`
-                : '⛔ Cannot bunk any'}
+                ? `✨ Can bunk ${maxBunkable} hr${maxBunkable > 1 ? 's' : ''}`
+                : '⛔ Don\'t miss next class'}
             </Text>
           </View>
-          <Text style={styles.bunkSubtext}>Target: 75% Min</Text>
+          <Text style={styles.bunkSubtext}>Target: 75% Minimum</Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -79,18 +90,18 @@ export default function HeroDashboardCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.card,
-    borderRadius: Spacing.cardRadiusLg,
+    backgroundColor: '#0C0E1A',
+    borderRadius: 18,
     padding: Spacing.md,
     marginHorizontal: Spacing.screenPad,
-    marginTop: Spacing.sm,
+    marginTop: Spacing.xs,
     marginBottom: Spacing.md,
     borderWidth: 1,
     shadowColor: Colors.primary,
     shadowOffset: {width: 0, height: 4},
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 3,
   },
   topRow: {
     flexDirection: 'row',
@@ -101,10 +112,12 @@ const styles = StyleSheet.create({
   badgeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: '#161928',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#242A42',
   },
   statusDot: {
     width: 7,
@@ -117,13 +130,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   streakBadge: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#FFB800',
-    backgroundColor: '#FFB80018',
+    backgroundColor: '#F59E0B18',
+    borderWidth: 1,
+    borderColor: '#F59E0B44',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 10,
+  },
+  streakBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#F59E0B',
   },
   metricRow: {
     flexDirection: 'row',
@@ -131,37 +148,46 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   percentText: {
-    fontSize: 32,
+    fontSize: 34,
     fontWeight: '800',
-    color: Colors.textPrimary,
     letterSpacing: -1,
   },
   percentLabel: {
     ...Typography.caption,
+    color: Colors.textSecondary,
     marginTop: -2,
+    fontWeight: '600',
   },
   divider: {
     width: 1,
-    height: 36,
-    backgroundColor: Colors.border,
+    height: 38,
+    backgroundColor: '#1E2338',
     marginHorizontal: 16,
   },
   bunkPill: {
-    backgroundColor: Colors.primary + '22',
+    backgroundColor: '#1E1E2E',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.primary + '44',
+    borderColor: Colors.border,
+  },
+  bunkPillSafe: {
+    backgroundColor: '#10B98118',
+    borderColor: '#10B98144',
   },
   bunkPillText: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.primaryLight,
+    color: Colors.textSecondary,
+  },
+  bunkPillTextSafe: {
+    color: '#34D399',
   },
   bunkSubtext: {
     fontSize: 10,
     color: Colors.textMuted,
     marginTop: 4,
+    fontWeight: '500',
   },
 });

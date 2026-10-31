@@ -20,6 +20,33 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- ============================================================
+-- TABLE 1B: Student Profiles (Phone Auth, Campus Discovery, LeetCode Streaks)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS profiles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  phone TEXT UNIQUE NOT NULL,
+  username TEXT UNIQUE NOT NULL,
+  full_name TEXT NOT NULL,
+  college TEXT NOT NULL,
+  academic_year TEXT NOT NULL, -- '1st Year', '2nd Year', '3rd Year', '4th Year', 'Postgraduate'
+  branch TEXT DEFAULT '',
+  overall_percent INTEGER DEFAULT 0,
+  theory_percent INTEGER DEFAULT 0,
+  lab_percent INTEGER DEFAULT 0,
+  current_streak INTEGER DEFAULT 0,
+  longest_streak INTEGER DEFAULT 0,
+  total_attended_hours NUMERIC DEFAULT 0,
+  total_held_hours NUMERIC DEFAULT 0,
+  active_days_count INTEGER DEFAULT 0,
+  activity_matrix JSONB DEFAULT '[]', -- Array of { date: 'YYYY-MM-DD', count: number, hours: number, level: 0-4 }
+  badges JSONB DEFAULT '[]',
+  is_public BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  last_active_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
 -- TABLE 2: Bug Reports from users
 -- ============================================================
 CREATE TABLE IF NOT EXISTS bug_reports (
@@ -142,11 +169,17 @@ CREATE INDEX IF NOT EXISTS idx_app_versions_status ON app_versions(status);
 CREATE INDEX IF NOT EXISTS idx_app_versions_code ON app_versions(version_code DESC);
 CREATE INDEX IF NOT EXISTS idx_host_queue_status ON host_queue(status);
 CREATE INDEX IF NOT EXISTS idx_users_device ON users(device_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_college ON profiles(LOWER(college));
+CREATE INDEX IF NOT EXISTS idx_profiles_username ON profiles(LOWER(username));
+CREATE INDEX IF NOT EXISTS idx_profiles_phone ON profiles(phone);
+CREATE INDEX IF NOT EXISTS idx_profiles_streak ON profiles(current_streak DESC);
+CREATE INDEX IF NOT EXISTS idx_profiles_overall_percent ON profiles(overall_percent DESC);
 
 -- ============================================================
 -- ROW LEVEL SECURITY (RLS) - Drop existing policies first
 -- ============================================================
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bug_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ai_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_versions ENABLE ROW LEVEL SECURITY;
@@ -154,6 +187,9 @@ ALTER TABLE host_queue ENABLE ROW LEVEL SECURITY;
 ALTER TABLE crash_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE changelogs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "profiles_select" ON profiles;
+DROP POLICY IF EXISTS "profiles_insert" ON profiles;
+DROP POLICY IF EXISTS "profiles_update" ON profiles;
 DROP POLICY IF EXISTS "users_insert" ON users;
 DROP POLICY IF EXISTS "users_select" ON users;
 DROP POLICY IF EXISTS "users_update" ON users;
@@ -168,6 +204,10 @@ DROP POLICY IF EXISTS "changelogs_select" ON changelogs;
 CREATE POLICY "users_insert" ON users FOR INSERT WITH CHECK (true);
 CREATE POLICY "users_select" ON users FOR SELECT USING (true);
 CREATE POLICY "users_update" ON users FOR UPDATE USING (true);
+
+CREATE POLICY "profiles_select" ON profiles FOR SELECT USING (true);
+CREATE POLICY "profiles_insert" ON profiles FOR INSERT WITH CHECK (true);
+CREATE POLICY "profiles_update" ON profiles FOR UPDATE USING (true);
 
 CREATE POLICY "bugs_insert" ON bug_reports FOR INSERT WITH CHECK (true);
 CREATE POLICY "bugs_select" ON bug_reports FOR SELECT USING (true);

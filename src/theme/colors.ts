@@ -7,6 +7,7 @@ export const Colors = {
   borderLight: '#3B3B54',
 
   textPrimary: '#F4F4FF',
+  text: '#F4F4FF',
   textSecondary: '#9494B8',
   textMuted: '#5C5C7A',
 

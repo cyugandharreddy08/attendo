@@ -7,12 +7,15 @@ export const linking: LinkingOptions<any> = {
       MainTabs: {
         screens: {
           Timetable: 'timetable/today',
+          Peers: 'peers',
           Stats: 'stats',
           Calendar: 'calendar',
           Settings: 'settings',
         },
       },
       SubjectDetail: 'subject/:subjectId',
+      PublicProfile: 'u/:username',
+      PhoneAuth: 'auth',
     },
   },
 };

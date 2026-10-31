@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect, useCallback} from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {checkForJSUpdate, checkForNativeUpdate} from '../services/OTAService';
@@ -21,7 +22,9 @@ import Clipboard from '@react-native-clipboard/clipboard';
 import {Linking, Modal, TextInput} from 'react-native';
 import {exportDataToJSON, importDataFromJSON} from '../db/queries/backup';
 
-import {useNavigation} from '@react-navigation/native';
+import {useNavigation, useIsFocused} from '@react-navigation/native';
+import {AuthService} from '../services/AuthService';
+import {StudentProfile} from '../types';
 
 const REMINDER_OPTIONS = [
   {label: '10 mins', value: 10},
@@ -34,10 +37,57 @@ const REMINDER_OPTIONS = [
 export default function SettingsScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
+
+  const [currentUser, setCurrentUser] = useState<StudentProfile | null>(null);
+  const [syncingProfile, setSyncingProfile] = useState(false);
+
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [reminderLead, setReminderLead] = useState(10);
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [importJsonText, setImportJsonText] = useState('');
+
+  const loadUserProfile = useCallback(async () => {
+    const user = await AuthService.getCurrentUser();
+    setCurrentUser(user);
+  }, []);
+
+  useEffect(() => {
+    if (isFocused) {
+      loadUserProfile();
+    }
+  }, [isFocused, loadUserProfile]);
+
+  const handleSyncProfile = async () => {
+    setSyncingProfile(true);
+    const res = await AuthService.syncAttendanceProfile();
+    setSyncingProfile(false);
+    if (res.success) {
+      Alert.alert('Attendance Synced', res.message);
+      loadUserProfile();
+    } else {
+      Alert.alert('Sync Notice', res.message);
+    }
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Switch Account / Logout',
+      'Are you sure you want to sign out from your campus profile on this device?',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            await AuthService.logout();
+            setCurrentUser(null);
+            Alert.alert('Signed Out', 'You have been disconnected from your public profile.');
+          },
+        },
+      ],
+    );
+  };
 
   const handleExportBackup = async () => {
     try {
@@ -131,6 +181,99 @@ export default function SettingsScreen() {
       style={[styles.container, {paddingTop: insets.top}]}
       contentContainerStyle={styles.content}>
       <Text style={styles.pageTitle}>Settings</Text>
+
+      {/* Campus Identity & Public Profile Card */}
+      {currentUser ? (
+        <View style={styles.profileCard}>
+          <View style={styles.profileCardHeader}>
+            <View style={styles.profileAvatar}>
+              <Text style={styles.profileAvatarText}>
+                {currentUser.full_name.substring(0, 2).toUpperCase()}
+              </Text>
+            </View>
+            <View style={{flex: 1}}>
+              <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
+                <Text style={styles.profileName}>{currentUser.full_name}</Text>
+                <Text style={styles.profileBadge}>✓ Student</Text>
+              </View>
+              <Text style={styles.profileUsername}>@{currentUser.username}</Text>
+              <Text style={styles.profileCollege} numberOfLines={1}>
+                🏛️ {currentUser.college} • {currentUser.academic_year}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.profileStatsRow}>
+            <View style={styles.profileStatItem}>
+              <Text style={styles.profileStatVal}>{currentUser.overall_percent}%</Text>
+              <Text style={styles.profileStatLbl}>Attendance</Text>
+            </View>
+            <View style={styles.profileStatDivider} />
+            <View style={styles.profileStatItem}>
+              <Text style={[styles.profileStatVal, {color: '#F59E0B'}]}>
+                🔥 {currentUser.current_streak}d
+              </Text>
+              <Text style={styles.profileStatLbl}>Streak</Text>
+            </View>
+            <View style={styles.profileStatDivider} />
+            <View style={styles.profileStatItem}>
+              <Text style={styles.profileStatVal}>{currentUser.theory_percent}%</Text>
+              <Text style={styles.profileStatLbl}>Theory</Text>
+            </View>
+            <View style={styles.profileStatDivider} />
+            <View style={styles.profileStatItem}>
+              <Text style={styles.profileStatVal}>{currentUser.lab_percent}%</Text>
+              <Text style={styles.profileStatLbl}>Labs</Text>
+            </View>
+          </View>
+
+          <View style={styles.profileActionsRow}>
+            <TouchableOpacity
+              style={styles.profileSyncBtn}
+              onPress={handleSyncProfile}
+              disabled={syncingProfile}>
+              {syncingProfile ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.profileSyncBtnText}>🔄 Sync Cloud Stats</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.profileViewBtn}
+              onPress={() => navigation.navigate('PublicProfile', {profile: currentUser})}>
+              <Text style={styles.profileViewBtnText}>View Public Profile 🔗</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={{flexDirection: 'row', justifyContent: 'space-between', marginTop: 10}}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('StudentSearch', {initialCollege: currentUser.college})}>
+              <Text style={styles.profileSecondaryLink}>🔍 Campus Directory</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleLogout}>
+              <Text style={[styles.profileSecondaryLink, {color: '#EF4444'}]}>
+                Switch / Sign Out
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <View style={styles.loginBannerCard}>
+          <View style={{flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6}}>
+            <Text style={{fontSize: 24}}>🎓</Text>
+            <Text style={styles.loginBannerTitle}>Join Campus Community</Text>
+          </View>
+          <Text style={styles.loginBannerSubtitle}>
+            Connect your mobile number, claim your @username, showcase your LeetCode attendance streak, and get discovered by classmates from your institute!
+          </Text>
+          <TouchableOpacity
+            style={styles.loginBannerBtn}
+            onPress={() => navigation.navigate('PhoneAuth')}>
+            <Text style={styles.loginBannerBtnText}>Connect Phone & Profile →</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <SettingsSection title="Class Start Notifications">
         <SettingsRow
@@ -452,5 +595,151 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.sm + 2,
     borderRadius: Spacing.cardRadius,
+  },
+  profileCard: {
+    backgroundColor: Colors.card,
+    borderRadius: 16,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#7C3AED55',
+    marginBottom: Spacing.lg,
+  },
+  profileCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  profileAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileAvatarText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 18,
+  },
+  profileName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  profileBadge: {
+    fontSize: 10,
+    backgroundColor: '#38BDF822',
+    color: '#38BDF8',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    fontWeight: '700',
+  },
+  profileUsername: {
+    fontSize: 12,
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  profileCollege: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  profileStatsRow: {
+    flexDirection: 'row',
+    backgroundColor: '#1E1E2E88',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginTop: 12,
+    marginBottom: 12,
+    alignItems: 'center',
+    justifyContent: 'space-around',
+  },
+  profileStatItem: {
+    alignItems: 'center',
+  },
+  profileStatVal: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  profileStatLbl: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    marginTop: 1,
+  },
+  profileStatDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: Colors.border,
+  },
+  profileActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  profileSyncBtn: {
+    flex: 1,
+    backgroundColor: Colors.primary,
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileSyncBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  profileViewBtn: {
+    flex: 1,
+    backgroundColor: '#1E1E2E',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileViewBtnText: {
+    color: Colors.text,
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  profileSecondaryLink: {
+    fontSize: 12,
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  loginBannerCard: {
+    backgroundColor: '#7C3AED18',
+    borderRadius: 16,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#7C3AED44',
+    marginBottom: Spacing.lg,
+  },
+  loginBannerTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  loginBannerSubtitle: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  loginBannerBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  loginBannerBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
   },
 });

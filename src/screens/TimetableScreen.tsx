@@ -30,6 +30,7 @@ import {
 import {deleteTimetableEntry, clearClassesForDay} from '../db/queries/timetable';
 import {executeSql, rowsToArray} from '../db/database';
 import {TimetableEntry, RootStackParamList, LectureInstance, AttendanceStatus} from '../types';
+import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import Toast from 'react-native-toast-message';
 import HeroDashboardCard from '../components/HeroDashboardCard';
 import LectureCard from '../components/LectureCard';
@@ -348,6 +349,11 @@ export default function TimetableScreen() {
             onPress={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}>
             <Text style={styles.viewToggleText}>{viewMode === 'list' ? '🗺️ Grid' : '📱 List'}</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.holidayBtn, {borderColor: '#F59E0B66', backgroundColor: '#F59E0B15'}]}
+            onPress={() => navigation.navigate('PublicProfile', {})}>
+            <Text style={[styles.holidayBtnText, {color: '#F59E0B'}]}>🔥 {streakCount}d Streak</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.holidayBtn} onPress={() => setBunkModalVisible(true)}>
             <Text style={styles.holidayBtnText}>🔮 Predict</Text>
           </TouchableOpacity>
@@ -398,7 +404,13 @@ export default function TimetableScreen() {
                 styles.dayCell,
                 isSelected && styles.dayCellSelected,
               ]}
-              onPress={() => setSelectedDate(date)}>
+              onPress={() => {
+                ReactNativeHapticFeedback.trigger('selection', {
+                  enableVibrateFallback: true,
+                  ignoreAndroidSystemSettings: false,
+                });
+                setSelectedDate(date);
+              }}>
               <Text style={[styles.dayName, isSelected && styles.dayNameSelected]}>
                 {DAYS_OF_WEEK[i]}
               </Text>
@@ -773,17 +785,28 @@ const styles = StyleSheet.create({
   },
   weekStrip: {
     flexDirection: 'row',
-    paddingHorizontal: Spacing.screenPad,
-    paddingTop: Spacing.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    backgroundColor: '#090B14',
+    borderRadius: 16,
+    marginHorizontal: Spacing.screenPad,
+    marginBottom: Spacing.sm,
+    borderWidth: 1,
+    borderColor: '#191D2C',
   },
   dayCell: {
     flex: 1,
     alignItems: 'center',
     paddingVertical: 8,
-    borderRadius: Spacing.cardRadius,
+    borderRadius: 12,
   },
   dayCellSelected: {
-    backgroundColor: Colors.primary,
+    backgroundColor: '#7C3AED',
+    shadowColor: '#7C3AED',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
   },
   dayName: {
     ...Typography.caption,
