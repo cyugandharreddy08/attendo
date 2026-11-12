@@ -30,8 +30,8 @@ export async function reportCrash(error: Error, screenName?: string): Promise<vo
 
 export function setupGlobalErrorHandler(): void {
   try {
-    const globalHandler = (global as any).ErrorUtils?.getGlobalHandler?.();
-    (global as any).ErrorUtils?.setGlobalHandler?.((error: Error, isFatal?: boolean) => {
+    const globalHandler = (globalThis as any).ErrorUtils?.getGlobalHandler?.();
+    (globalThis as any).ErrorUtils?.setGlobalHandler?.((error: Error, isFatal?: boolean) => {
       reportCrash(error, isFatal ? 'FATAL_ERROR' : 'JS_ERROR');
       if (globalHandler) {
         globalHandler(error, isFatal);

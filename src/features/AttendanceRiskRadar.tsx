@@ -4,6 +4,8 @@ import {Colors} from '../theme/colors';
 import {Spacing} from '../theme/spacing';
 import {Typography} from '../theme/typography';
 import {executeSql, rowsToArray} from '../db/database';
+import {getAllSubjects} from '../db/queries/subjects';
+import {getAttendanceStats} from '../db/queries/lectureInstances';
 
 interface RiskPattern {
   dayOfWeek: string;
@@ -15,6 +17,8 @@ interface AtRiskSubject {
   percent: number;
   targetPercent: number;
   weeksUntilDanger: number;
+  neededHours: number;
+  bunksLeft: number;
 }
 
 export default function AttendanceRiskRadar() {
@@ -40,34 +44,28 @@ export default function AttendanceRiskRadar() {
       setMostMissedDay(dayRows[0]);
     }
 
-    // 2. Identify subjects at risk within 2-4 weeks
-    const subRes = await executeSql(`
-      SELECT s.name, s.target_percent as targetPercent,
-             SUM(CASE WHEN li.status = 'present' THEN 1 ELSE 0 END) as attended,
-             SUM(CASE WHEN li.status = 'absent' THEN 1 ELSE 0 END) as absent
-      FROM subjects s
-      JOIN lecture_instances li ON s.id = li.subject_id
-      WHERE li.status IS NOT NULL
-      GROUP BY s.id
-    `);
-    const subRows = rowsToArray<any>(subRes);
+    // 2. Identify subjects at risk using centralized attendance stats
+    const subjects = await getAllSubjects();
     const risks: AtRiskSubject[] = [];
 
-    subRows.forEach(r => {
-      const total = r.attended + r.absent;
-      if (total > 0) {
-        const percent = Math.round((r.attended / total) * 100);
-        const margin = percent - r.targetPercent;
-        if (margin <= 5) {
+    for (const s of subjects) {
+      const stats = await getAttendanceStats(s.id, s.target_percent);
+      const target = s.target_percent || 75;
+
+      if (stats.total > 0) {
+        const margin = stats.percent - target;
+        if (margin <= 5 || stats.isInDangerZone) {
           risks.push({
-            name: r.name,
-            percent,
-            targetPercent: r.targetPercent,
+            name: s.name,
+            percent: stats.percent,
+            targetPercent: target,
             weeksUntilDanger: margin <= 0 ? 0 : Math.max(1, Math.ceil(margin / 2)),
+            neededHours: stats.neededToTarget,
+            bunksLeft: stats.maxBunkable,
           });
         }
       }
-    });
+    }
 
     setAtRiskSubjects(risks);
   };
@@ -94,7 +92,7 @@ export default function AttendanceRiskRadar() {
             <View style={{flex: 1}}>
               <Text style={styles.subName}>{sub.name}</Text>
               <Text style={styles.subDetail}>
-                Current: {sub.percent}% | Target: {sub.targetPercent}%
+                Current: {sub.percent}% | Target: {sub.targetPercent}% {sub.bunksLeft > 0 ? `| Buffer: ${sub.bunksLeft}h` : `| Recover: +${sub.neededHours}h`}
               </Text>
             </View>
             <View style={styles.warningTag}>
@@ -107,6 +105,12 @@ export default function AttendanceRiskRadar() {
       ) : (
         <Text style={styles.cleanText}>✅ All subjects are currently safe from falling below target!</Text>
       )}
+
+      <View style={styles.disclaimerContainer}>
+        <Text style={styles.disclaimerText}>
+          ℹ️ Risk warnings analyze past absence patterns and duration-weighted metrics to alert you before you breach eligibility.
+        </Text>
+      </View>
     </View>
   );
 }
@@ -119,6 +123,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     marginBottom: Spacing.lg,
+  },
+  disclaimerContainer: {
+    marginTop: Spacing.xs,
+    paddingTop: Spacing.xs,
+  },
+  disclaimerText: {
+    fontSize: 10,
+    color: Colors.textMuted || '#64748B',
+    lineHeight: 14,
   },
   header: {
     marginBottom: Spacing.md,

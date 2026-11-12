@@ -3,6 +3,7 @@ import {LectureInstance, AttendanceStatus, AttendanceStats, AttendanceActivityDa
 import {executeSql, rowsToArray, executeInTransaction} from '../database';
 import {appendEditHistory} from './editHistory';
 import {getSubjectById} from './subjects';
+import {computeAttendanceMetrics, parseDurationHours} from '../../services/AttendanceEngine';
 
 export function getDayOfWeekFromDateStr(dateStr: string): string {
   const parts = dateStr.split('-');
@@ -17,6 +18,7 @@ export function getDayOfWeekFromDateStr(dateStr: string): string {
 
 export async function cleanupDuplicateInstances(): Promise<void> {
   try {
+    // 1. Clean timetable duplicates safely
     await executeSql(`
       DELETE FROM timetable
       WHERE id NOT IN (
@@ -25,14 +27,53 @@ export async function cleanupDuplicateInstances(): Promise<void> {
         GROUP BY subject_id, day_of_week, start_time, end_time
       )
     `);
-    await executeSql(`
-      DELETE FROM lecture_instances
-      WHERE id NOT IN (
-        SELECT MIN(id)
-        FROM lecture_instances
-        GROUP BY date, subject_id, start_time
-      )
+
+    // 2. Intelligent deduplication of lecture_instances
+    // Find duplicate groups
+    const dupGroups = await executeSql(`
+      SELECT date, subject_id, start_time, COUNT(*) as cnt
+      FROM lecture_instances
+      GROUP BY date, subject_id, start_time
+      HAVING cnt > 1
     `);
+    const groups = rowsToArray<{date: string; subject_id: number; start_time: string}>(dupGroups);
+
+    for (const group of groups) {
+      const allDupesRes = await executeSql(`
+        SELECT * FROM lecture_instances
+        WHERE date = ? AND subject_id = ? AND start_time = ?
+        ORDER BY
+          CASE WHEN status IS NOT NULL AND status != '' THEN 0 ELSE 1 END,
+          CASE WHEN marked_at IS NOT NULL THEN 0 ELSE 1 END,
+          id ASC
+      `, [group.date, group.subject_id, group.start_time]);
+      const dupes = rowsToArray<any>(allDupesRes);
+      if (dupes.length <= 1) continue;
+
+      const survivor = dupes[0];
+      const victims = dupes.slice(1);
+      const victimIds = victims.map(v => v.id);
+
+      // Merge notes if survivor notes are empty and any victim has notes
+      let mergedNotes = survivor.notes || '';
+      for (const v of victims) {
+        if (!mergedNotes && v.notes) {
+          mergedNotes = v.notes;
+        }
+      }
+      if (mergedNotes !== (survivor.notes || '')) {
+        await executeSql('UPDATE lecture_instances SET notes = ? WHERE id = ?', [mergedNotes, survivor.id]);
+      }
+
+      // Re-link edit_history to survivor
+      for (const vicId of victimIds) {
+        await executeSql('UPDATE edit_history SET lecture_instance_id = ? WHERE lecture_instance_id = ?', [survivor.id, vicId]);
+      }
+
+      // Delete victim duplicate records
+      const placeholders = victimIds.map(() => '?').join(',');
+      await executeSql(`DELETE FROM lecture_instances WHERE id IN (${placeholders})`, victimIds);
+    }
   } catch (e) {
     console.error('Error cleaning duplicate instances:', e);
   }
@@ -520,7 +561,7 @@ export async function getAttendanceStats(subjectId: number, targetPercent: numbe
   let cancelled = 0;
 
   rows.forEach(row => {
-    const hours = calculateDurationHours(row.start_time, row.end_time);
+    const hours = parseDurationHours(row.start_time, row.end_time);
     switch (row.status) {
       case 'present': attended += hours; break;
       case 'absent': absent += hours; break;
@@ -529,63 +570,31 @@ export async function getAttendanceStats(subjectId: number, targetPercent: numbe
     }
   });
 
-  attended = Math.round(attended * 10) / 10;
-  absent = Math.round(absent * 10) / 10;
-  holiday = Math.round(holiday * 10) / 10;
-  cancelled = Math.round(cancelled * 10) / 10;
+  const metrics = computeAttendanceMetrics({
+    attendedHours: attended,
+    conductedHours: attended + absent,
+    absentHours: absent,
+    holidayHours: holiday,
+    cancelledHours: cancelled,
+    targetPercent,
+  });
 
-  const countableTotal = Math.round((attended + absent) * 10) / 10;
-
-  if (countableTotal === 0) {
-    return {
-      total: 0,
-      attended: 0,
-      absent: 0,
-      holiday,
-      cancelled,
-      percent: 0,
-      maxBunkable: 0,
-      neededToTarget: 0,
-      isInDangerZone: false,
-      statusMessage: 'No classes held yet',
-    };
-  }
-
-  const percent = Math.round((attended / countableTotal) * 100);
-  const targetRatio = targetPercent / 100;
-
-  let maxBunkable = 0;
-  let neededToTarget = 0;
-  let statusMessage = '';
-
-  if (percent >= targetPercent) {
-    maxBunkable = Math.max(0, Math.floor((attended / targetRatio) - countableTotal));
-    neededToTarget = 0;
-    if (maxBunkable > 0) {
-      statusMessage = `You can bunk ${maxBunkable} hr${maxBunkable > 1 ? 's' : ''} safely`;
-    } else {
-      statusMessage = `On target! Don't miss next class`;
-    }
-  } else {
-    neededToTarget = Math.ceil((targetRatio * countableTotal - attended) / (1 - targetRatio));
-    maxBunkable = 0;
-    statusMessage = `Must attend ${neededToTarget} consecutive hr${neededToTarget > 1 ? 's' : ''} to reach ${targetPercent}%`;
-  }
-
-  const nextPercent = Math.round(((attended) / (countableTotal + 1)) * 100);
-  const isInDangerZone = nextPercent < targetPercent || percent < targetPercent;
+  const nextPercent = metrics.conductedHours > 0
+    ? Math.round(((metrics.attendedHours) / (metrics.conductedHours + 1)) * 100)
+    : 0;
+  const isInDangerZone = nextPercent < targetPercent || !metrics.isEligible;
 
   return {
-    total: countableTotal,
-    attended,
-    absent,
-    holiday,
-    cancelled,
-    percent,
-    maxBunkable,
-    neededToTarget,
+    total: metrics.conductedHours,
+    attended: metrics.attendedHours,
+    absent: metrics.absentHours,
+    holiday: metrics.holidayHours,
+    cancelled: metrics.cancelledHours,
+    percent: metrics.percent,
+    maxBunkable: metrics.maxBunkableHours,
+    neededToTarget: metrics.neededConsecutiveHours,
     isInDangerZone,
-    statusMessage,
+    statusMessage: metrics.statusMessage,
   };
 }
 
@@ -626,18 +635,17 @@ export async function getOverallAttendanceStats(targetPercent: number = 75): Pro
     };
   }
 
-  const totalPercent = Math.round((grandAttendedCredits / grandTotalCredits) * 100);
-  const targetRatio = targetPercent / 100;
-  const maxBunkable = totalPercent >= targetPercent
-    ? Math.max(0, Math.floor((grandAttendedCredits / targetRatio) - grandTotalCredits))
-    : 0;
-  const isInDanger = totalPercent < targetPercent;
+  const overallMetrics = computeAttendanceMetrics({
+    attendedHours: grandAttendedCredits,
+    conductedHours: grandTotalCredits,
+    targetPercent,
+  });
 
   return {
-    totalPercent,
-    totalClasses: grandTotalCredits,
-    maxBunkable,
-    isInDanger,
+    totalPercent: overallMetrics.percent,
+    totalClasses: overallMetrics.conductedHours,
+    maxBunkable: overallMetrics.maxBunkableHours,
+    isInDanger: !overallMetrics.isEligible,
   };
 }
 

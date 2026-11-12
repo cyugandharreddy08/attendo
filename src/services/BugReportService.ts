@@ -1,4 +1,4 @@
-import { supabaseRestRequest, getDeviceId } from './SupabaseClient';
+import { supabaseRestRequest, getDeviceId, loadAuthSession } from './SupabaseClient';
 import { APP_VERSION } from '../config/supabase';
 import { Platform } from 'react-native';
 import RNBlobUtil from 'react-native-blob-util';
@@ -10,6 +10,7 @@ export type BugStatus = 'new' | 'ai_reviewed' | 'confirmed' | 'in_progress' | 'f
 
 export interface BugReport {
   id: string;
+  uuid?: string;
   title: string;
   description: string;
   category: BugCategory;
@@ -37,11 +38,20 @@ export interface SubmitBugInput {
   imageUri?: string | null;
 }
 
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 async function ensureLocalTableExists(): Promise<void> {
   try {
     await executeSql(`
       CREATE TABLE IF NOT EXISTS local_bugs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uuid TEXT UNIQUE,
         title TEXT NOT NULL,
         description TEXT NOT NULL,
         category TEXT NOT NULL DEFAULT 'general',
@@ -57,7 +67,18 @@ async function ensureLocalTableExists(): Promise<void> {
   }
 }
 
-async function ensureUser(): Promise<string | null> {
+async function getAuthenticatedOrDeviceIdUser(): Promise<string | null> {
+  // First check if user is logged in via real Supabase Auth
+  try {
+    const session = await loadAuthSession();
+    if (session && session.user_id) {
+      return session.user_id;
+    }
+  } catch {
+    // Session read error
+  }
+
+  // Fallback to anonymous device user registration
   const deviceId = getDeviceId();
   try {
     const { data: users } = await supabaseRestRequest<any[]>(`users?device_id=eq.${encodeURIComponent(deviceId)}`);
@@ -86,19 +107,20 @@ async function ensureUser(): Promise<string | null> {
     }
     return null;
   } catch (e) {
-    console.warn('ensureUser failed:', e);
+    console.warn('getAuthenticatedOrDeviceIdUser failed:', e);
     return null;
   }
 }
 
-async function saveLocalBug(input: SubmitBugInput): Promise<void> {
+async function saveLocalBug(input: SubmitBugInput, reportUuid: string): Promise<void> {
   try {
     await ensureLocalTableExists();
     const now = new Date().toISOString();
     await executeSql(
-      `INSERT INTO local_bugs (title, description, category, severity, steps_to_reproduce, image_uri, created_at, is_synced)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
+      `INSERT INTO local_bugs (uuid, title, description, category, severity, steps_to_reproduce, image_uri, created_at, is_synced)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       [
+        reportUuid,
         input.title || 'Bug Report',
         input.description || '',
         input.category || 'general',
@@ -114,11 +136,13 @@ async function saveLocalBug(input: SubmitBugInput): Promise<void> {
 }
 
 export async function submitBugReport(input: SubmitBugInput): Promise<{ success: boolean; offline?: boolean; error?: string }> {
-  // 1. Always save locally first so user data is 100% safe
-  await saveLocalBug(input);
+  const reportUuid = generateUUID();
+
+  // 1. Always save locally first with explicit unique UUID
+  await saveLocalBug(input, reportUuid);
 
   try {
-    const userId = await ensureUser();
+    const userId = await getAuthenticatedOrDeviceIdUser();
     const uri = input.imageUri || input.screenshotUri;
 
     let screenshotUrl: string | undefined;
@@ -133,6 +157,7 @@ export async function submitBugReport(input: SubmitBugInput): Promise<{ success:
     const { error } = await supabaseRestRequest('bug_reports', {
       method: 'POST',
       body: {
+        id: reportUuid,
         user_id: userId || null,
         title: input.title || 'Bug Report',
         description: input.description || '',
@@ -156,8 +181,8 @@ export async function submitBugReport(input: SubmitBugInput): Promise<{ success:
     }
 
     try {
-      await executeSql('UPDATE local_bugs SET is_synced = 1 WHERE title = ? AND description = ?', [input.title || '', input.description || '']);
-    } catch (sErr) {}
+      await executeSql('UPDATE local_bugs SET is_synced = 1 WHERE uuid = ?', [reportUuid]);
+    } catch {}
 
     return { success: true };
   } catch (e: any) {
@@ -166,11 +191,59 @@ export async function submitBugReport(input: SubmitBugInput): Promise<{ success:
   }
 }
 
+/**
+ * Retries syncing all unsynced local bug reports to Supabase when online.
+ */
+export async function syncPendingBugs(): Promise<number> {
+  try {
+    await ensureLocalTableExists();
+    const result = await executeSql('SELECT * FROM local_bugs WHERE is_synced = 0 ORDER BY created_at ASC');
+    const pending = rowsToArray<any>(result);
+    if (pending.length === 0) return 0;
+
+    const userId = await getAuthenticatedOrDeviceIdUser();
+    let syncedCount = 0;
+
+    for (const item of pending) {
+      const bugId = item.uuid || generateUUID();
+      const { error } = await supabaseRestRequest('bug_reports', {
+        method: 'POST',
+        body: {
+          id: bugId,
+          user_id: userId || null,
+          title: item.title,
+          description: item.description,
+          category: item.category,
+          severity: item.severity,
+          screen_name: 'Queued Offline Report',
+          steps_to_reproduce: item.steps_to_reproduce,
+          app_version: APP_VERSION,
+          device_info: {
+            os: Platform.OS,
+            version: Platform.Version,
+            device_id: getDeviceId(),
+          },
+        },
+      });
+
+      if (!error) {
+        await executeSql('UPDATE local_bugs SET is_synced = 1 WHERE id = ?', [item.id]);
+        syncedCount++;
+      }
+    }
+
+    return syncedCount;
+  } catch (e) {
+    console.warn('syncPendingBugs error:', e);
+    return 0;
+  }
+}
+
 export async function fetchMyBugReports(): Promise<BugReport[]> {
   try {
     await ensureLocalTableExists();
 
-    const userId = await ensureUser();
+    const userId = await getAuthenticatedOrDeviceIdUser();
     let onlineReports: BugReport[] = [];
     if (userId) {
       const { data } = await supabaseRestRequest<BugReport[]>(
@@ -186,6 +259,7 @@ export async function fetchMyBugReports(): Promise<BugReport[]> {
 
     const localReports: BugReport[] = (localRows || []).map((row) => ({
       id: `local-${row.id}`,
+      uuid: row.uuid,
       title: row.title || 'Bug Report',
       description: row.description || '',
       category: (row.category || 'general') as BugCategory,
@@ -214,7 +288,7 @@ export async function uploadScreenshot(fileUri: string): Promise<string | undefi
     const exists = await RNBlobUtil.fs.exists(cleanUri);
     if (!exists) return undefined;
 
-    // Optional upload safely skipped if storage bucket is not configured
+    // Optional upload safely handled
     return undefined;
   } catch (e) {
     console.warn('uploadScreenshot safely skipped:', e);

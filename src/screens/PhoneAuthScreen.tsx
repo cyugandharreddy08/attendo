@@ -117,9 +117,6 @@ export default function PhoneAuthScreen() {
       const res = await AuthService.sendPhoneOtp(phone);
       setLoading(false);
       if (res.success) {
-        if (res.isDemoMode) {
-          setDemoHint(res.message);
-        }
         setStep('otp');
       } else {
         Alert.alert('Error', res.message);
@@ -178,7 +175,6 @@ export default function PhoneAuthScreen() {
     setLoading(true);
     try {
       const res = await AuthService.createOrUpdateProfile({
-        phone,
         username,
         fullName,
         college,
