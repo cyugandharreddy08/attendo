@@ -18,6 +18,14 @@ import {APP_VERSION, APP_VERSION_CODE} from '../config/supabase';
 import {Colors} from '../theme/colors';
 import {Spacing} from '../theme/spacing';
 
+let globalTriggerForceUpdate: ((version?: AppVersion) => void) | null = null;
+
+export function triggerForceUpdateModal(customVersion?: AppVersion) {
+  if (globalTriggerForceUpdate) {
+    globalTriggerForceUpdate(customVersion);
+  }
+}
+
 export default function ForceUpdateModal() {
   const [visible, setVisible] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<AppVersion | null>(null);
@@ -29,6 +37,22 @@ export default function ForceUpdateModal() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    // Register global trigger
+    globalTriggerForceUpdate = (customVersion?: AppVersion) => {
+      const v = customVersion || {
+        version_name: '8.0.0',
+        version_code: 800,
+        release_notes: '🚀 Major v8.0.0 Release:\n• Real Phone OTP Authentication & Profile Hub\n• Timetable Theory vs Lab Split Attendance\n• 300+ Indian Engineering Colleges & Branches\n• Fix period glitches across days\n• Multi-device cloud sync with login',
+        apk_url: 'https://github.com/cyugandharreddy08/attendo/releases/download/v8.0.0/Attendo_v8.0.0.apk',
+        apk_size_bytes: 31431064,
+        is_mandatory: true,
+      };
+      setUpdateInfo(v);
+      const pkgMB = (v.apk_size_bytes / (1024 * 1024)).toFixed(1);
+      setTotalMB(pkgMB);
+      setVisible(true);
+    };
+
     // Check update on launch
     const check = async () => {
       const result = await checkLatestAppVersion();
@@ -41,6 +65,10 @@ export default function ForceUpdateModal() {
     };
 
     check();
+
+    return () => {
+      globalTriggerForceUpdate = null;
+    };
   }, []);
 
   useEffect(() => {

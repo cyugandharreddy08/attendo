@@ -1,37 +1,42 @@
-import CodePush from 'react-native-code-push';
 import {Alert} from 'react-native';
+import {checkLatestAppVersion} from './UpdateService';
+import {triggerForceUpdateModal} from '../components/ForceUpdateModal';
+import {APP_VERSION} from '../config/supabase';
 
 /**
- * ⚡ Clean Production OTA Update Engine
- * Performs standard CodePush bundle check with zero duplicate dialogs or fake alerts.
+ * ⚡ Production Force Update & Release Engine
+ * Automatically prompts or locks older versions with the download gatekeeper.
  */
-export function checkForJSUpdate(isManual: boolean = false): void {
+export async function checkForJSUpdate(isManual: boolean = false): Promise<void> {
   try {
-    CodePush.sync(
-      {
-        installMode: CodePush.InstallMode.ON_NEXT_RESUME,
-      },
-      status => {
-        if (isManual) {
-          switch (status) {
-            case CodePush.SyncStatus.UP_TO_DATE:
-              Alert.alert('⚡ System Status', 'Attendo is running the latest update (v7.1.0).');
-              break;
-            case CodePush.SyncStatus.UPDATE_INSTALLED:
-              Alert.alert('🎉 Update Installed', 'Update ready! Will apply on next restart.');
-              break;
-          }
-        }
-      },
-    );
+    const result = await checkLatestAppVersion();
+    if (result.hasUpdate && result.version) {
+      triggerForceUpdateModal(result.version);
+      return;
+    }
+
+    if (isManual) {
+      Alert.alert(
+        '⚡ System Status: Up to Date',
+        `Attendo is running the latest version (${APP_VERSION}). Would you like to test or preview the Force Update Gatekeeper interface?`,
+        [
+          {text: 'Close', style: 'cancel'},
+          {
+            text: 'Preview Force Update',
+            onPress: () => {
+              triggerForceUpdateModal();
+            },
+          },
+        ]
+      );
+    }
   } catch (e) {
     if (isManual) {
-      Alert.alert('⚡ System Status', 'Attendo is running the latest update (v7.1.0).');
+      Alert.alert('⚡ System Status', `Attendo is running version ${APP_VERSION}.`);
     }
   }
 }
 
 export function checkForNativeUpdate(isManual: boolean = false): void {
-  // Alias to checkForJSUpdate to prevent duplicate alerts
   checkForJSUpdate(isManual);
 }
