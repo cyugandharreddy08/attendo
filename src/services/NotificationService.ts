@@ -32,9 +32,23 @@ async function createClassChannel(): Promise<void> {
   });
 }
 
+export async function checkAndRequestNotificationPermission(): Promise<boolean> {
+  try {
+    const settings = await notifee.getNotificationSettings();
+    if (settings.authorizationStatus >= 1) return true;
+    const requested = await notifee.requestPermission();
+    return requested.authorizationStatus >= 1;
+  } catch (e) {
+    return false;
+  }
+}
+
 export async function scheduleClassReminders(leadMinutes: number = 10): Promise<void> {
   try {
     if (leadMinutes <= 0) return;
+    const hasPermission = await checkAndRequestNotificationPermission();
+    if (!hasPermission) return;
+
     await createClassChannel();
 
     const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -85,6 +99,8 @@ export async function scheduleClassReminders(leadMinutes: number = 10): Promise<
 
 export async function scheduleEndOfDayNudge(hour: number = 20, minute: number = 0): Promise<void> {
   try {
+    const hasPermission = await checkAndRequestNotificationPermission();
+    if (!hasPermission) return;
     await createChannel();
 
     // Cancel any existing
@@ -188,6 +204,8 @@ async function createTodoChannel(): Promise<void> {
 export async function scheduleTaskAlarm(task: TodoItem): Promise<void> {
   try {
     if (!task.due_date) return;
+    const hasPermission = await checkAndRequestNotificationPermission();
+    if (!hasPermission) return;
     await createTodoChannel();
 
     const dueStr = `${task.due_date}T${task.due_time || '09:00'}:00`;

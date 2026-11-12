@@ -20,8 +20,8 @@ android {
         applicationId "com.tracker75"
         minSdk rootProject.ext.minSdkVersion
         targetSdk rootProject.ext.targetSdkVersion
-        versionCode 710
-        versionName "7.1.0"
+        versionCode 800
+        versionName "8.0.0"
         resValue "string", "CodePushDeploymentKey", project.hasProperty('CODEPUSH_KEY_STAGING') ? project.CODEPUSH_KEY_STAGING : ""
     }
 

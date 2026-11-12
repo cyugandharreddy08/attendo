@@ -4,6 +4,17 @@ import {executeSql, rowsToArray, executeInTransaction} from '../database';
 import {appendEditHistory} from './editHistory';
 import {getSubjectById} from './subjects';
 
+export function getDayOfWeekFromDateStr(dateStr: string): string {
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    return format(new Date(y, m, d, 12, 0, 0), 'EEEE');
+  }
+  return format(parseISO(dateStr), 'EEEE');
+}
+
 export async function cleanupDuplicateInstances(): Promise<void> {
   try {
     await executeSql(`
@@ -30,8 +41,7 @@ export async function cleanupDuplicateInstances(): Promise<void> {
 export async function ensureInstancesForDate(dateStr: string): Promise<void> {
   await cleanupDuplicateInstances();
 
-  const dateObj = parseISO(dateStr);
-  const dayName = format(dateObj, 'EEEE');
+  const dayName = getDayOfWeekFromDateStr(dateStr);
 
   const timetableResult = await executeSql(
     `SELECT t.* FROM timetable t
@@ -57,6 +67,11 @@ export async function ensureInstancesForDate(dateStr: string): Promise<void> {
 
   for (const entry of timetableEntries) {
     const override = overrideMap.get(entry.id);
+    if (override && (override.reason === 'cancelled' || override.reason === 'deleted')) {
+      // User explicitly cancelled or deleted this specific instance - do NOT recreate
+      continue;
+    }
+
     const startTime = override?.new_start_time ?? entry.start_time;
     const dayOfWeek = override?.new_day ?? entry.day_of_week;
     const isOverride = override ? 1 : 0;
@@ -450,6 +465,18 @@ export async function swapLectureInstances(idA: number, idB: number): Promise<vo
 }
 
 export async function deleteSingleInstance(instanceId: number): Promise<void> {
+  const instance = await getInstanceById(instanceId);
+  if (instance && instance.original_timetable_id) {
+    // Record tombstone in overrides table so ensureInstancesForDate will NEVER resurrect it
+    try {
+      await executeSql(
+        'INSERT INTO overrides (timetable_id, date, reason) VALUES (?, ?, ?)',
+        [instance.original_timetable_id, instance.date, 'cancelled'],
+      );
+    } catch (e) {
+      console.warn('Could not record cancellation override:', e);
+    }
+  }
   await executeSql('DELETE FROM lecture_instances WHERE id = ?', [instanceId]);
 }
 
@@ -788,5 +815,138 @@ export async function getUserAttendanceActivityReport(): Promise<{
     activeDaysCount,
     activityMatrix,
     badges,
+  };
+}
+
+export interface CategoryAttendanceStats {
+  percent: number;
+  attendedHours: number;
+  heldHours: number;
+  maxBunkableHours: number;
+  neededHours: number;
+  isInDanger: boolean;
+}
+
+export interface SplitAttendanceStats {
+  theory: CategoryAttendanceStats;
+  lab: CategoryAttendanceStats;
+  overallPercent: number;
+  totalAttendedHours: number;
+  totalHeldHours: number;
+  maxBunkableHours: number;
+  isInDanger: boolean;
+}
+
+export async function getTheoryAndLabAttendanceStats(targetPercent: number = 75): Promise<SplitAttendanceStats> {
+  const subRes = await executeSql('SELECT id, subject_type, past_attended, past_total FROM subjects WHERE is_frozen = 0');
+  const subs = rowsToArray<{id: number; subject_type: string; past_attended: number; past_total: number}>(subRes);
+  const subjectTypeMap = new Map<number, string>();
+
+  let theoryAttended = 0;
+  let theoryHeld = 0;
+  let labAttended = 0;
+  let labHeld = 0;
+
+  subs.forEach(s => {
+    const isLab = (s.subject_type || 'theory').toLowerCase() === 'lab';
+    subjectTypeMap.set(s.id, isLab ? 'lab' : 'theory');
+    const pastAtt = s.past_attended ?? 0;
+    const pastTot = s.past_total ?? 0;
+    if (isLab) {
+      labAttended += pastAtt;
+      labHeld += pastTot;
+    } else {
+      theoryAttended += pastAtt;
+      theoryHeld += pastTot;
+    }
+  });
+
+  const instRes = await executeSql(`
+    SELECT subject_id, start_time, end_time, status
+    FROM lecture_instances
+    WHERE status IS NOT NULL AND status IN ('present', 'absent')
+  `);
+  const instances = rowsToArray<{subject_id: number; start_time: string; end_time: string; status: string}>(instRes);
+
+  instances.forEach(inst => {
+    const hours = calculateDurationHours(inst.start_time, inst.end_time);
+    const isLab = subjectTypeMap.get(inst.subject_id) === 'lab';
+
+    if (inst.status === 'present') {
+      if (isLab) {
+        labAttended += hours;
+        labHeld += hours;
+      } else {
+        theoryAttended += hours;
+        theoryHeld += hours;
+      }
+    } else if (inst.status === 'absent') {
+      if (isLab) {
+        labHeld += hours;
+      } else {
+        theoryHeld += hours;
+      }
+    }
+  });
+
+  theoryAttended = Math.round(theoryAttended * 10) / 10;
+  theoryHeld = Math.round(theoryHeld * 10) / 10;
+  labAttended = Math.round(labAttended * 10) / 10;
+  labHeld = Math.round(labHeld * 10) / 10;
+
+  const totalAttended = Math.round((theoryAttended + labAttended) * 10) / 10;
+  const totalHeld = Math.round((theoryHeld + labHeld) * 10) / 10;
+
+  const targetRatio = targetPercent / 100;
+
+  // Theory metrics
+  const theoryPercent = theoryHeld > 0 ? Math.round((theoryAttended / theoryHeld) * 100) : 0;
+  const theoryBunkable = (theoryHeld > 0 && theoryPercent >= targetPercent)
+    ? Math.max(0, Math.floor((theoryAttended / targetRatio) - theoryHeld))
+    : 0;
+  const theoryNeeded = (theoryHeld > 0 && theoryPercent < targetPercent)
+    ? Math.ceil((targetRatio * theoryHeld - theoryAttended) / (1 - targetRatio))
+    : 0;
+  const theoryDanger = theoryHeld > 0 && theoryPercent < targetPercent;
+
+  // Lab metrics
+  const labPercent = labHeld > 0 ? Math.round((labAttended / labHeld) * 100) : 0;
+  const labBunkable = (labHeld > 0 && labPercent >= targetPercent)
+    ? Math.max(0, Math.floor((labAttended / targetRatio) - labHeld))
+    : 0;
+  const labNeeded = (labHeld > 0 && labPercent < targetPercent)
+    ? Math.ceil((targetRatio * labHeld - labAttended) / (1 - targetRatio))
+    : 0;
+  const labDanger = labHeld > 0 && labPercent < targetPercent;
+
+  // Overall metrics
+  const overallPercent = totalHeld > 0 ? Math.round((totalAttended / totalHeld) * 100) : 0;
+  const overallBunkable = (totalHeld > 0 && overallPercent >= targetPercent)
+    ? Math.max(0, Math.floor((totalAttended / targetRatio) - totalHeld))
+    : 0;
+  const overallDanger = totalHeld > 0 && overallPercent < targetPercent;
+
+  return {
+    theory: {
+      percent: theoryPercent,
+      attendedHours: theoryAttended,
+      heldHours: theoryHeld,
+      maxBunkableHours: theoryBunkable,
+      neededHours: theoryNeeded,
+      isInDanger: theoryDanger,
+    },
+    lab: {
+      percent: labPercent,
+      attendedHours: labAttended,
+      heldHours: labHeld,
+      maxBunkableHours: labBunkable,
+      neededHours: labNeeded,
+      isInDanger: labDanger,
+    },
+    overallPercent,
+    totalAttendedHours: totalAttended,
+    totalHeldHours: totalHeld,
+    maxBunkableHours: overallBunkable,
+    isInDanger: overallDanger,
   };
 }

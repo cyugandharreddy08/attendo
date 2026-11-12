@@ -1,6 +1,7 @@
 import {supabaseRestRequest, getDeviceId} from './SupabaseClient';
 import {getSetting, setSetting, deleteSetting} from '../db/queries/settings';
 import {getUserAttendanceActivityReport} from '../db/queries/lectureInstances';
+import {CloudBackupService} from './CloudBackupService';
 import {StudentProfile} from '../types';
 
 const SETTING_PROFILE_KEY = 'auth_student_profile';
@@ -126,6 +127,10 @@ export class AuthService {
       if (!fetchErr && existingProfiles && existingProfiles.length > 0) {
         const found = existingProfiles[0];
         await this.saveLocalProfile(found);
+        // Automatically restore user's subjects, timetable, and attendance history from cloud
+        CloudBackupService.restoreUserDataFromCloud(phone).catch(err => {
+          console.warn('Auto restore on login error:', err);
+        });
         // Sync local stats to cloud on login
         this.syncAttendanceProfile().catch(() => {});
         return {
@@ -248,10 +253,17 @@ export class AuthService {
       
       const savedProfile = (data && data[0]) ? data[0] : profileData;
       await this.saveLocalProfile(savedProfile);
-      return {success: true, profile: savedProfile, message: 'Profile saved successfully!'};
+
+      // Automatically backup user data to cloud linked to their login
+      CloudBackupService.uploadBackupToCloud(phone).catch(err => {
+        console.warn('Cloud backup error on profile save:', err);
+      });
+
+      return {success: true, profile: savedProfile, message: 'Profile saved & data synced to cloud! 🚀'};
     } catch (e: any) {
       await this.saveLocalProfile(profileData);
-      return {success: true, profile: profileData, message: 'Profile saved locally (offline mode)!'};
+      CloudBackupService.uploadBackupToCloud(phone).catch(() => {});
+      return {success: true, profile: profileData, message: 'Profile saved locally & queued for sync!'};
     }
   }
 
@@ -289,6 +301,9 @@ export class AuthService {
 
       await this.saveLocalProfile(fullProfile);
 
+      // Also backup database to cloud
+      CloudBackupService.uploadBackupToCloud(current.phone).catch(() => {});
+
       const encodedPhone = encodeURIComponent(current.phone);
       await supabaseRestRequest(`profiles?phone=eq.${encodedPhone}`, {
         method: 'PATCH',
@@ -302,6 +317,29 @@ export class AuthService {
     } catch (e: any) {
       return {success: false, message: e?.message || 'Sync failed'};
     }
+  }
+
+  /**
+   * Explicitly backup local data to user's cloud account
+   */
+  static async backupNow(): Promise<{success: boolean; message: string}> {
+    const current = await this.getCurrentUser();
+    if (!current?.phone) {
+      return {success: false, message: 'Please log in with phone number first.'};
+    }
+    return CloudBackupService.uploadBackupToCloud(current.phone);
+  }
+
+  /**
+   * Explicitly restore user's data from cloud account
+   */
+  static async restoreNow(): Promise<{success: boolean; message: string}> {
+    const current = await this.getCurrentUser();
+    if (!current?.phone) {
+      return {success: false, message: 'Please log in with phone number first.'};
+    }
+    const res = await CloudBackupService.restoreUserDataFromCloud(current.phone);
+    return {success: res.success, message: res.message};
   }
 
   /**

@@ -26,6 +26,8 @@ import {
   deleteSingleInstance,
   getOverallAttendanceStats,
   getOverallStreak,
+  getTheoryAndLabAttendanceStats,
+  SplitAttendanceStats,
 } from '../db/queries/lectureInstances';
 import {deleteTimetableEntry, clearClassesForDay} from '../db/queries/timetable';
 import {executeSql, rowsToArray} from '../db/database';
@@ -33,6 +35,7 @@ import {TimetableEntry, RootStackParamList, LectureInstance, AttendanceStatus} f
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import Toast from 'react-native-toast-message';
 import HeroDashboardCard from '../components/HeroDashboardCard';
+import TimetableSplitStatsCard from '../components/TimetableSplitStatsCard';
 import LectureCard from '../components/LectureCard';
 import StatusBottomSheet from '../components/StatusBottomSheet';
 import RescheduleBottomSheet from '../components/RescheduleBottomSheet';
@@ -82,6 +85,7 @@ export default function TimetableScreen() {
   const weekDates = getWeekDates(selectedDate);
 
   const [streakCount, setStreakCount] = useState(0);
+  const [splitStats, setSplitStats] = useState<SplitAttendanceStats | null>(null);
 
   const [overallStats, setOverallStats] = useState({
     totalPercent: 0,
@@ -93,16 +97,18 @@ export default function TimetableScreen() {
   const loadLectures = useCallback(async () => {
     try {
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
-      const [dayData, weekData, overall, streak] = await Promise.all([
+      const [dayData, weekData, overall, streak, split] = await Promise.all([
         getInstancesByDate(dateStr),
         getInstancesForWeek(selectedDate),
         getOverallAttendanceStats(75),
         getOverallStreak(),
+        getTheoryAndLabAttendanceStats(75),
       ]);
       setLectures(dayData ?? []);
       setWeekLectures(weekData ?? []);
       setOverallStats(overall);
       setStreakCount(streak);
+      setSplitStats(split);
     } catch (e) {
       console.error('Error loading lectures:', e);
     }
@@ -340,7 +346,7 @@ export default function TimetableScreen() {
     <View style={styles.header}>
       <View style={styles.headerTop}>
         <TouchableOpacity onPress={() => openBulkSheetForDate(selectedDate)}>
-          <Text style={styles.brandTitle}>ATTENDO <Text style={styles.v3Badge}>v7.1</Text></Text>
+          <Text style={styles.brandTitle}>ATTENDO <Text style={styles.v3Badge}>v8.0</Text></Text>
           <Text style={styles.monthLabel}>{format(selectedDate, 'EEEE, MMMM d, yyyy')} ⚙️</Text>
         </TouchableOpacity>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.headerActionsScroll}>
@@ -382,14 +388,13 @@ export default function TimetableScreen() {
         </View>
       )}
 
-      {/* Hero Dashboard Card */}
-      <HeroDashboardCard
-        totalPercent={overallStats.totalPercent}
-        totalClasses={overallStats.totalClasses}
+      {/* Split Theory & Lab Attendance HUD Card */}
+      <TimetableSplitStatsCard
+        splitStats={splitStats}
         streakCount={streakCount}
-        maxBunkable={overallStats.maxBunkable}
-        isInDanger={overallStats.isInDanger}
-        onPressStats={() => navigation.navigate('MainTabs' as any, {screen: 'Stats'})}
+        onPress={() => navigation.navigate('MainTabs' as any, {screen: 'Stats'})}
+        onTheoryPress={() => navigation.navigate('MainTabs' as any, {screen: 'Stats'})}
+        onLabPress={() => navigation.navigate('MainTabs' as any, {screen: 'Stats'})}
       />
 
       {/* Week Day Selector Strip */}

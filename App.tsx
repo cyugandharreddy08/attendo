@@ -19,6 +19,7 @@ import {initDatabase} from './src/db/database';
 import {generateTodayInstances} from './src/db/queries/lectureInstances';
 import {scheduleEndOfDayNudge, scheduleClassReminders} from './src/services/NotificationService';
 import {checkForJSUpdate, checkForNativeUpdate} from './src/services/OTAService';
+import ForceUpdateModal from './src/components/ForceUpdateModal';
 import {Colors} from './src/theme/colors';
 
 interface Props {
@@ -234,6 +235,7 @@ function App(): React.JSX.Element {
               <AppNavigator />
             </BottomSheetModalProvider>
           </NavigationContainer>
+          <ForceUpdateModal />
           <Toast />
         </SafeAreaProvider>
       </GestureHandlerRootView>

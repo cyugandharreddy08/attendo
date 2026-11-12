@@ -115,10 +115,23 @@ export async function updateTimetableEntry(
       [dayOfWeekOrSubjectId, startTimeOrDayOfWeek, endTimeOrStartTime, roomOrEndTime, id],
     );
   }
+
+  // Purge any unmarked phantom instances tied to the old timetable slot so they regenerate correctly
+  try {
+    await executeSql(
+      'DELETE FROM lecture_instances WHERE original_timetable_id = ? AND status IS NULL',
+      [id],
+    );
+  } catch (e) {
+    console.warn('Failed to clear unmarked future instances on timetable update:', e);
+  }
 }
 
 export async function deleteTimetableEntry(id: number): Promise<void> {
-  await executeSql('DELETE FROM lecture_instances WHERE original_timetable_id = ?', [id]);
+  // Never delete marked historical attendance! Only delete unmarked instances.
+  await executeSql('DELETE FROM lecture_instances WHERE original_timetable_id = ? AND status IS NULL', [id]);
+  // Decouple marked history so FOREIGN KEY constraint doesn't cascade delete them
+  await executeSql('UPDATE lecture_instances SET original_timetable_id = NULL WHERE original_timetable_id = ?', [id]);
   await executeSql('DELETE FROM timetable WHERE id = ?', [id]);
 }
 

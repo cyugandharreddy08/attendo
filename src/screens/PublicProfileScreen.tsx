@@ -253,6 +253,45 @@ export default function PublicProfileScreen() {
         </TouchableOpacity>
 
         {isOwnProfile && (
+          <View style={styles.cloudBackupCard}>
+            <Text style={styles.cloudBackupTitle}>☁️ Cloud Attendance Vault</Text>
+            <Text style={styles.cloudBackupSubtitle}>
+              Your subjects, timetable, and attendance history are linked to {profile.phone}.
+            </Text>
+            <View style={styles.cloudActionRow}>
+              <TouchableOpacity
+                style={styles.cloudActionBtn}
+                onPress={async () => {
+                  const res = await AuthService.backupNow();
+                  Alert.alert(res.success ? '🚀 Cloud Backup' : 'Backup Alert', res.message);
+                }}>
+                <Text style={styles.cloudActionBtnText}>⬆️ Backup Now</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.cloudActionBtn, {backgroundColor: '#1E2438', borderColor: '#334155'}]}
+                onPress={async () => {
+                  Alert.alert(
+                    'Restore from Cloud',
+                    'Restore your saved timetable and attendance history from cloud?',
+                    [
+                      {text: 'Cancel', style: 'cancel'},
+                      {
+                        text: 'Restore',
+                        onPress: async () => {
+                          const res = await AuthService.restoreNow();
+                          Alert.alert(res.success ? '✅ Cloud Restored' : 'Restore Alert', res.message);
+                        },
+                      },
+                    ]
+                  );
+                }}>
+                <Text style={[styles.cloudActionBtnText, {color: '#CBD5E1'}]}>⬇️ Restore</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {isOwnProfile && (
           <TouchableOpacity
             style={styles.editProfileBtn}
             onPress={() => navigation.navigate('PhoneAuth')}>
@@ -539,5 +578,44 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontWeight: '600',
     fontSize: 13,
+  },
+  cloudBackupCard: {
+    backgroundColor: '#0C0E1A',
+    borderRadius: 16,
+    padding: Spacing.md,
+    borderWidth: 1.2,
+    borderColor: '#00F2FE33',
+    marginVertical: 4,
+  },
+  cloudBackupTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#00F2FE',
+    marginBottom: 4,
+  },
+  cloudBackupSubtitle: {
+    fontSize: 11,
+    color: '#94A3B8',
+    marginBottom: 12,
+    lineHeight: 16,
+  },
+  cloudActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  cloudActionBtn: {
+    flex: 1,
+    backgroundColor: '#00F2FE18',
+    borderWidth: 1,
+    borderColor: '#00F2FE66',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cloudActionBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#00F2FE',
   },
 });

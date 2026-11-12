@@ -1,7 +1,7 @@
 {
   "name": "attendo",
-  "version": "7.1.0",
-  "description": "Smart College Attendance Tracker & Predictive Class Planner with Weighted Hours & AI Lab Separation",
+  "version": "8.0.0",
+  "description": "Smart College Attendance Tracker & Predictive Class Planner with Real Phone Auth, Theory vs Lab Split & Cloud Sync",
   "author": "Yugandhar Reddy",
   "license": "MIT",
   "homepage": "https://github.com/cyugandharreddy08/attendo",

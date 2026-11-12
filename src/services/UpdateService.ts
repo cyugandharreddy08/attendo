@@ -1,16 +1,17 @@
 import { supabaseRestRequest, getDeviceId } from './SupabaseClient';
-import { APP_VERSION } from '../config/supabase';
+import { APP_VERSION, APP_VERSION_CODE } from '../config/supabase';
 import { Platform } from 'react-native';
 
 export interface AppVersion {
-  id: string;
+  id?: string;
   version_name: string;
   version_code: number;
   release_notes: string;
   apk_url: string;
   apk_size_bytes: number;
-  status: string;
-  released_at: string;
+  status?: string;
+  released_at?: string;
+  is_mandatory?: boolean;
 }
 
 export interface Changelog {
@@ -18,6 +19,73 @@ export interface Changelog {
   version_name: string;
   entries: Array<{ type: 'fix' | 'feature' | 'improvement'; text: string }>;
   published_at: string;
+}
+
+export async function checkLatestAppVersion(): Promise<{
+  hasUpdate: boolean;
+  isMandatory: boolean;
+  version: AppVersion | null;
+}> {
+  try {
+    // 1. Try fetching from Supabase app_versions
+    const { data: versions } = await supabaseRestRequest<AppVersion[]>(
+      'app_versions?order=version_code.desc&limit=1'
+    );
+
+    if (versions && versions.length > 0) {
+      const latest = versions[0];
+      if (latest.version_code > APP_VERSION_CODE) {
+        return {
+          hasUpdate: true,
+          isMandatory: true,
+          version: latest,
+        };
+      }
+    }
+
+    // 2. Fallback to GitHub Releases API
+    const ghRes = await fetch(
+      'https://api.github.com/repos/cyugandharreddy08/attendo/releases/latest',
+      {
+        headers: {
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'Attendo-App',
+        },
+      }
+    );
+
+    if (ghRes.ok) {
+      const release = await ghRes.json();
+      const tagName = release.tag_name || ''; // e.g. "v8.0.0"
+      const cleanVer = tagName.replace('v', '');
+      const parts = cleanVer.split('.').map((p: string) => parseInt(p, 10) || 0);
+      const remoteVersionCode = (parts[0] || 0) * 100 + (parts[1] || 0) * 10 + (parts[2] || 0);
+
+      const apkAsset = release.assets?.find((a: any) =>
+        a.name.endsWith('.apk')
+      );
+
+      if (remoteVersionCode > APP_VERSION_CODE) {
+        return {
+          hasUpdate: true,
+          isMandatory: true,
+          version: {
+            version_name: cleanVer,
+            version_code: remoteVersionCode,
+            release_notes: release.body || 'New Attendo update available with new features and stability fixes.',
+            apk_url: apkAsset?.browser_download_url || `https://github.com/cyugandharreddy08/attendo/releases/download/${tagName}/Attendo_${tagName}.apk`,
+            apk_size_bytes: apkAsset?.size || 32900000,
+            is_mandatory: true,
+          },
+        };
+      }
+    }
+
+    return { hasUpdate: false, isMandatory: false, version: null };
+  } catch (e) {
+    console.warn('Check update error:', e);
+    return { hasUpdate: false, isMandatory: false, version: null };
+  }
 }
 
 export async function registerDevice(): Promise<void> {
