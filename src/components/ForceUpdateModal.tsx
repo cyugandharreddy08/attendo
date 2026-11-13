@@ -53,19 +53,6 @@ export default function ForceUpdateModal() {
       setVisible(true);
     };
 
-    // Check update on launch
-    const check = async () => {
-      const result = await checkLatestAppVersion();
-      if (result.hasUpdate && result.version) {
-        setUpdateInfo(result.version);
-        const pkgMB = (result.version.apk_size_bytes / (1024 * 1024)).toFixed(1);
-        setTotalMB(pkgMB);
-        setVisible(true);
-      }
-    };
-
-    check();
-
     return () => {
       globalTriggerForceUpdate = null;
     };

@@ -20,9 +20,8 @@ android {
         applicationId "com.tracker75"
         minSdk rootProject.ext.minSdkVersion
         targetSdk rootProject.ext.targetSdkVersion
-        versionCode 801
-        versionName "8.0.1"
-        resValue "string", "CodePushDeploymentKey", project.hasProperty('CODEPUSH_KEY_STAGING') ? project.CODEPUSH_KEY_STAGING : ""
+        versionCode 802
+        versionName "8.0.2"
     }
 
     signingConfigs {
@@ -32,6 +31,19 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            if (project.hasProperty('ATTENDO_RELEASE_STORE_FILE')) {
+                storeFile file(ATTENDO_RELEASE_STORE_FILE)
+                storePassword ATTENDO_RELEASE_STORE_PASSWORD
+                keyAlias ATTENDO_RELEASE_KEY_ALIAS
+                keyPassword ATTENDO_RELEASE_KEY_PASSWORD
+            } else {
+                storeFile file('attendo-release.keystore')
+                storePassword 'attendo2026production'
+                keyAlias 'attendo-key-alias'
+                keyPassword 'attendo2026production'
+            }
+        }
     }
 
     buildTypes {
@@ -40,7 +52,7 @@ android {
             matchingFallbacks = ['debug', 'release']
         }
         release {
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             matchingFallbacks = ['release', 'debug']
             minifyEnabled false
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
@@ -63,5 +75,4 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib:${rootProject.ext.kotlinVersion}"
 }
 
-apply from: "../../node_modules/react-native-code-push/android/codepush.gradle"
 apply from: file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesAppBuildGradle(project)

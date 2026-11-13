@@ -44,12 +44,9 @@ export default function AnimatedPressable({
   hapticType = 'impactLight' as HapticType,
   disabled = false,
   activeOpacity = 0.88,
-  glowOnPress = false,
-  glowColor = 'rgba(139, 92, 246, 0.4)',
 }: AnimatedPressableProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const opacityAnim = useRef(new Animated.Value(1)).current;
-  const glowAnim = useRef(new Animated.Value(0)).current;
 
   const handlePressIn = () => {
     if (disabled) return;
@@ -76,15 +73,6 @@ export default function AnimatedPressable({
         duration: 100,
         useNativeDriver: true,
       }),
-      ...(glowOnPress
-        ? [
-            Animated.timing(glowAnim, {
-              toValue: 1,
-              duration: 100,
-              useNativeDriver: false,
-            }),
-          ]
-        : []),
     ]).start();
   };
 
@@ -102,17 +90,12 @@ export default function AnimatedPressable({
         duration: 150,
         useNativeDriver: true,
       }),
-      ...(glowOnPress
-        ? [
-            Animated.timing(glowAnim, {
-              toValue: 0,
-              duration: 200,
-              useNativeDriver: false,
-            }),
-          ]
-        : []),
     ]).start();
   };
+
+  // Extract flex-related layout properties so Pressable container honors flexbox in row containers
+  const flattened = StyleSheet.flatten(style) || {};
+  const isFlex = flattened.flex !== undefined;
 
   return (
     <Pressable
@@ -120,23 +103,14 @@ export default function AnimatedPressable({
       onLongPress={onLongPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
-      disabled={disabled}>
+      disabled={disabled}
+      style={isFlex ? {flex: flattened.flex} : undefined}>
       <Animated.View
         style={[
           style,
           {
             transform: [{scale: scaleAnim}],
             opacity: opacityAnim,
-          },
-          glowOnPress && {
-            shadowColor: glowColor,
-            shadowOffset: {width: 0, height: 4},
-            shadowOpacity: glowAnim,
-            shadowRadius: 12,
-            elevation: glowAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, 8],
-            }),
           },
         ]}>
         {children}

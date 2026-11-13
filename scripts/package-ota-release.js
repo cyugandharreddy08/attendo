@@ -5,7 +5,7 @@ const { execSync } = require('child_process');
 
 const packageJson = require('../package.json');
 const version = process.argv[2] || packageJson.version;
-const minNativeCode = parseInt(process.argv[3] || '800', 10);
+const minNativeCode = parseInt(process.argv[3] || '1', 10);
 const rolloutPercentage = parseInt(process.argv[4] || '100', 10);
 
 const rootDir = path.join(__dirname, '..');

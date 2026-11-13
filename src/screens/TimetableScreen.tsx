@@ -428,8 +428,6 @@ export default function TimetableScreen() {
               key={i}
               scaleTo={0.92}
               hapticType="selection"
-              glowOnPress={true}
-              glowColor="#A855F7"
               style={[
                 styles.dayCell,
                 isSelected && styles.dayCellSelected,
@@ -447,6 +445,14 @@ export default function TimetableScreen() {
               ]}>
                 {format(date, 'd')}
               </Text>
+              {isTodayDate && (
+                <View
+                  style={[
+                    styles.todayIndicatorDot,
+                    isSelected && styles.todayIndicatorDotSelected,
+                  ]}
+                />
+              )}
             </AnimatedPressable>
           );
         })}
@@ -811,45 +817,67 @@ const styles = StyleSheet.create({
   },
   weekStrip: {
     flexDirection: 'row',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    backgroundColor: '#090B14',
-    borderRadius: 16,
+    padding: 6,
+    backgroundColor: '#0A0E17',
+    borderRadius: 18,
     marginHorizontal: Spacing.screenPad,
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
     borderWidth: 1,
-    borderColor: '#191D2C',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   dayCell: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 8,
+    justifyContent: 'center',
+    paddingVertical: 10,
     borderRadius: 12,
+    marginHorizontal: 2,
+    backgroundColor: 'transparent',
   },
   dayCellSelected: {
     backgroundColor: '#7C3AED',
+    borderWidth: 1,
+    borderColor: 'rgba(167, 139, 250, 0.6)',
     shadowColor: '#7C3AED',
     shadowOffset: {width: 0, height: 4},
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    elevation: 6,
   },
   dayName: {
-    ...Typography.caption,
-    color: Colors.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
   dayNameSelected: {
-    color: '#fff',
+    color: '#F8FAFC',
   },
   dayNum: {
-    ...Typography.h4,
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#94A3B8',
     marginTop: 2,
   },
   dayNumSelected: {
-    color: '#fff',
+    color: '#FFFFFF',
+    fontWeight: '900',
   },
   dayNumToday: {
-    color: Colors.primary,
+    color: '#38BDF8',
+  },
+  todayIndicatorDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#38BDF8',
+    marginTop: 4,
+  },
+  todayIndicatorDotSelected: {
+    backgroundColor: '#FFFFFF',
   },
   list: {
     paddingBottom: 100,

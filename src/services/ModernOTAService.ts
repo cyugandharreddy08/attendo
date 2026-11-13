@@ -87,20 +87,43 @@ export class ModernOTAService {
       const currentStatus = await this.getOTAStatus();
       const currentActive = currentStatus?.activeVersion || APP_VERSION;
 
-      // 1. Fetch latest OTA manifest from Supabase `app_bundles`
+      // 1. Fetch latest verified OTA candidates from Supabase `app_bundles`
       let manifest: OTAReleaseManifest | null = null;
 
       const { data: bundles } = await supabaseRestRequest<OTAReleaseManifest[]>(
-        'app_bundles?order=created_at.desc&limit=1'
+        `app_bundles?min_native_code=lte.${APP_VERSION_CODE}&order=created_at.desc&limit=5`
       );
 
       if (bundles && bundles.length > 0) {
-        manifest = bundles[0];
+        const candidate = bundles.find(b =>
+          b.bundle_version &&
+          b.sha256 &&
+          b.sha256.length === 64 &&
+          b.signature &&
+          b.bundle_url &&
+          b.bundle_url.startsWith('https://') &&
+          b.min_native_code <= APP_VERSION_CODE &&
+          (!b.max_native_code || b.max_native_code >= APP_VERSION_CODE)
+        );
+        if (candidate) {
+          manifest = candidate;
+        }
       }
 
-      // 2. Fallback to GitHub releases metadata
+      // 2. Fallback to GitHub releases metadata with strict field validation
       if (!manifest) {
-        manifest = await this.fetchGitHubOTAManifest();
+        const ghManifest = await this.fetchGitHubOTAManifest();
+        if (
+          ghManifest &&
+          ghManifest.bundle_version &&
+          ghManifest.sha256 &&
+          ghManifest.sha256.length === 64 &&
+          ghManifest.signature &&
+          ghManifest.bundle_url &&
+          ghManifest.bundle_url.startsWith('https://')
+        ) {
+          manifest = ghManifest;
+        }
       }
 
       if (!manifest) {

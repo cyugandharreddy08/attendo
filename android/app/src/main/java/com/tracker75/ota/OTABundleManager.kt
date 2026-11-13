@@ -85,20 +85,48 @@ object OTABundleManager {
         }
 
         try {
-            // 1. Clear previous
-            if (previous.exists()) previous.deleteRecursively()
-
-            // 2. Move active -> previous (if active exists)
-            if (active.exists()) {
-                active.renameTo(previous)
+            // 1. Clear previous directory with strict failure checking
+            if (previous.exists() && !previous.deleteRecursively()) {
+                Log.e(TAG, "Cannot promote: failed to clear previous directory")
+                return false
             }
 
-            // 3. Move pending -> active
-            val success = pending.renameTo(active)
-            if (!success) {
-                // If direct rename fails, copy and delete
-                pending.copyRecursively(active, overwrite = true)
+            // 2. Backup current active -> previous (if active exists)
+            if (active.exists()) {
+                val movedToPrevious = active.renameTo(previous)
+                if (!movedToPrevious) {
+                    val copied = active.copyRecursively(previous, overwrite = true)
+                    if (!copied) {
+                        Log.e(TAG, "Cannot promote: failed to backup active to previous")
+                        return false
+                    }
+                    if (!active.deleteRecursively()) {
+                        Log.e(TAG, "Cannot promote: failed to delete old active after copy")
+                        return false
+                    }
+                }
+            }
+
+            // 3. Move pending -> active with checked fallback
+            val movedToActive = pending.renameTo(active)
+            if (!movedToActive) {
+                val copied = pending.copyRecursively(active, overwrite = true)
+                if (!copied) {
+                    Log.e(TAG, "Cannot promote: failed to copy pending directory to active")
+                    // Try to restore previous back to active if it was backed up
+                    if (previous.exists()) {
+                        previous.renameTo(active)
+                    }
+                    return false
+                }
                 pending.deleteRecursively()
+            }
+
+            // 4. Validate resulting active bundle
+            val promotedBundle = File(active, BUNDLE_FILE_NAME)
+            if (!promotedBundle.exists() || promotedBundle.length() < 1000) {
+                Log.e(TAG, "Cannot promote: active bundle verification failed after promotion")
+                return false
             }
 
             Log.i(TAG, "Successfully promoted pending bundle to active!")
@@ -118,17 +146,35 @@ object OTABundleManager {
         val previous = getPreviousDir(context)
 
         try {
-            if (active.exists()) {
-                active.deleteRecursively()
+            // 1. Delete broken active bundle
+            if (active.exists() && !active.deleteRecursively()) {
+                Log.e(TAG, "Rollback: failed to clean broken active directory")
             }
 
-            if (previous.exists() && File(previous, BUNDLE_FILE_NAME).exists()) {
-                previous.renameTo(active)
-                Log.i(TAG, "Rolled back active directory to previous confirmed bundle.")
-                return true
+            // 2. Restore previous if available
+            val previousBundle = File(previous, BUNDLE_FILE_NAME)
+            if (previous.exists() && previousBundle.exists() && previousBundle.length() > 1000) {
+                val restored = previous.renameTo(active)
+                if (!restored) {
+                    val copied = previous.copyRecursively(active, overwrite = true)
+                    if (!copied) {
+                        Log.e(TAG, "Rollback failed: could not copy previous directory to active")
+                        return false
+                    }
+                    previous.deleteRecursively()
+                }
+
+                val activeBundle = File(active, BUNDLE_FILE_NAME)
+                if (activeBundle.exists() && activeBundle.length() > 1000) {
+                    Log.i(TAG, "Rolled back active directory to previous confirmed bundle.")
+                    return true
+                } else {
+                    Log.e(TAG, "Rollback failed: restored bundle in active directory is invalid")
+                    return false
+                }
             }
 
-            Log.i(TAG, "No previous bundle found; rolled back to embedded factory APK bundle.")
+            Log.i(TAG, "No previous custom bundle found; rolled back to embedded factory APK bundle.")
             return true
         } catch (e: Exception) {
             Log.e(TAG, "Rollback failed: ${e.message}")

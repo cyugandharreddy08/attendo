@@ -16,13 +16,22 @@ object OTAHealthMonitor {
     private const val MAX_BOOT_FAILURES = 2
     private const val STATE_FILE_NAME = "ota_state.json"
 
+    fun getAppVersion(context: Context): String {
+        return try {
+            val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            pInfo.versionName ?: "8.0.2"
+        } catch (e: Exception) {
+            "8.0.2"
+        }
+    }
+
     data class OTAState(
         var status: String = "EMBEDDED", // EMBEDDED, PENDING, ACTIVE, CONFIRMED, ROLLED_BACK
-        var activeVersion: String = "8.0.0",
+        var activeVersion: String = "8.0.2",
         var pendingVersion: String? = null,
         var bootFailureCount: Int = 0,
         var lastRollbackReason: String? = null,
-        var confirmedVersion: String = "8.0.0"
+        var confirmedVersion: String = "8.0.2"
     )
 
     private fun getStateFile(context: Context): File {
@@ -34,21 +43,22 @@ object OTAHealthMonitor {
     @Synchronized
     fun readState(context: Context): OTAState {
         val file = getStateFile(context)
-        if (!file.exists()) return OTAState()
+        val defaultVersion = getAppVersion(context)
+        if (!file.exists()) return OTAState(activeVersion = defaultVersion, confirmedVersion = defaultVersion)
 
         return try {
             val json = JSONObject(file.readText())
             OTAState(
                 status = json.optString("status", "EMBEDDED"),
-                activeVersion = json.optString("active_version", "8.0.0"),
+                activeVersion = json.optString("active_version", defaultVersion),
                 pendingVersion = if (json.has("pending_version") && !json.isNull("pending_version")) json.getString("pending_version") else null,
                 bootFailureCount = json.optInt("boot_failure_count", 0),
                 lastRollbackReason = if (json.has("last_rollback_reason") && !json.isNull("last_rollback_reason")) json.getString("last_rollback_reason") else null,
-                confirmedVersion = json.optString("confirmed_version", "8.0.0")
+                confirmedVersion = json.optString("confirmed_version", defaultVersion)
             )
         } catch (e: Exception) {
             Log.e(TAG, "Error reading OTA state, defaulting to safe embedded state: ${e.message}")
-            OTAState()
+            OTAState(activeVersion = defaultVersion, confirmedVersion = defaultVersion)
         }
     }
 
@@ -79,57 +89,64 @@ object OTAHealthMonitor {
     fun onAppLaunch(context: Context) {
         val state = readState(context)
 
-        // 1. Check if there is a verified PENDING bundle awaiting activation on this launch
-        if (state.status == "PENDING" && state.pendingVersion != null) {
-            Log.i(TAG, "Activating pending OTA bundle: ${state.pendingVersion}")
-            val promoted = OTABundleManager.promotePendingToActive(context)
-            if (promoted) {
-                state.status = "ACTIVE"
-                state.activeVersion = state.pendingVersion!!
-                state.pendingVersion = null
-                state.bootFailureCount = 1
-                writeState(context, state)
-                return
-            } else {
-                Log.e(TAG, "Failed to promote pending bundle to active; remaining on current bundle.")
-                state.status = "CONFIRMED"
-                state.pendingVersion = null
-                writeState(context, state)
-                return
+        when (state.status) {
+            "PENDING" -> {
+                Log.i(TAG, "Promoting PENDING bundle (v${state.pendingVersion}) to ACTIVE...")
+                val promoted = OTABundleManager.promotePendingToActive(context)
+                if (promoted) {
+                    state.status = "ACTIVE"
+                    state.activeVersion = state.pendingVersion ?: state.activeVersion
+                    state.pendingVersion = null
+                    state.bootFailureCount = 1 // Start failure tracker for the newly promoted active bundle
+                    writeState(context, state)
+                } else {
+                    Log.e(TAG, "Failed to promote pending bundle. Reverting to EMBEDDED.")
+                    state.status = "EMBEDDED"
+                    state.pendingVersion = null
+                    writeState(context, state)
+                }
             }
-        }
+            "ACTIVE" -> {
+                state.bootFailureCount += 1
+                Log.w(TAG, "Active bundle boot attempt count: ${state.bootFailureCount} / $MAX_BOOT_FAILURES")
 
-        // 2. If status is ACTIVE (currently testing newly booted bundle)
-        if (state.status == "ACTIVE") {
-            if (state.bootFailureCount >= MAX_BOOT_FAILURES) {
-                Log.w(TAG, "⚠️ Bundle ${state.activeVersion} failed to boot ${state.bootFailureCount} times. Triggering AUTOMATIC ROLLBACK!")
-                OTABundleManager.rollback(context)
-                state.status = "ROLLED_BACK"
-                state.lastRollbackReason = "Crash loop detected on startup (${state.bootFailureCount} failed attempts)"
-                state.activeVersion = state.confirmedVersion
+                if (state.bootFailureCount > MAX_BOOT_FAILURES) {
+                    Log.e(TAG, "Active bundle exceeded max crash threshold! Triggering automatic rollback...")
+                    val rolledBack = OTABundleManager.rollback(context)
+                    state.status = if (rolledBack) "ROLLED_BACK" else "EMBEDDED"
+                    state.lastRollbackReason = "Exceeded $MAX_BOOT_FAILURES startup boot attempts without confirmation"
+                    state.bootFailureCount = 0
+                    writeState(context, state)
+                } else {
+                    writeState(context, state)
+                }
+            }
+            "CONFIRMED" -> {
+                // Happy path: Healthy verified bundle
                 state.bootFailureCount = 0
                 writeState(context, state)
-            } else {
-                state.bootFailureCount += 1
-                Log.i(TAG, "Booting unconfirmed active bundle ${state.activeVersion} (Attempt #${state.bootFailureCount})")
-                writeState(context, state)
+            }
+            else -> {
+                // EMBEDDED or ROLLED_BACK
             }
         }
     }
 
     /**
-     * Called from JavaScript once the React component tree mounts and passes initial health checks.
-     * Marks the active bundle as CONFIRMED.
+     * Called from JS once React Native has successfully mounted its root view and rendered UI.
+     * Transitions ACTIVE -> CONFIRMED and resets boot failures.
      */
     @Synchronized
     fun confirmBoot(context: Context): Boolean {
         val state = readState(context)
-        Log.i(TAG, "🎉 Boot successfully confirmed by JavaScript for version ${state.activeVersion}!")
-        state.status = "CONFIRMED"
-        state.confirmedVersion = state.activeVersion
-        state.bootFailureCount = 0
-        state.lastRollbackReason = null
-        writeState(context, state)
-        return true
+        if (state.status == "ACTIVE" || state.status == "EMBEDDED") {
+            state.status = "CONFIRMED"
+            state.bootFailureCount = 0
+            state.confirmedVersion = state.activeVersion
+            writeState(context, state)
+            Log.i(TAG, "Bundle v${state.activeVersion} confirmed healthy by JavaScript runtime.")
+            return true
+        }
+        return false
     }
 }

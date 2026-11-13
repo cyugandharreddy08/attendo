@@ -9,9 +9,6 @@
 # SQLite
 -keep class org.pgsqlite.** { *; }
 
-# CodePush
--keep class com.microsoft.codepush.** { *; }
-
 # Notifee
 -keep class app.notifee.** { *; }
 

@@ -150,7 +150,7 @@ export class CloudBackupService {
 
     return {
       schema_version: BACKUP_SCHEMA_VERSION,
-      app_version: '8.0.1',
+      app_version: '8.0.2',
       exported_at: new Date().toISOString(),
       checksum,
       subjects,
