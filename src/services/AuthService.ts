@@ -186,7 +186,6 @@ export class AuthService {
         method: 'POST',
         body: {
           email,
-          create_user: true,
         },
       });
 
