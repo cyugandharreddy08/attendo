@@ -1,10 +1,11 @@
 import React from 'react';
-import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
+import {View, Text, StyleSheet} from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import {SplitAttendanceStats} from '../db/queries/lectureInstances';
 import {Colors} from '../theme/colors';
 import {Spacing} from '../theme/spacing';
 import {Typography} from '../theme/typography';
+import AnimatedPressable from './AnimatedPressable';
 
 interface Props {
   splitStats: SplitAttendanceStats | null;
@@ -72,10 +73,12 @@ export default function TimetableSplitStatsCard({
   return (
     <View style={styles.container}>
       {/* Top HUD status bar */}
-      <TouchableOpacity
+      <AnimatedPressable
+        scaleTo={0.97}
+        glowOnPress={true}
+        glowColor={overallColor}
         style={styles.topHudBar}
-        onPress={handleCardPress}
-        activeOpacity={0.85}>
+        onPress={handleCardPress}>
         <View style={styles.overallPill}>
           <View style={[styles.statusDot, {backgroundColor: overallColor}]} />
           <Text style={styles.overallLabel}>OVERALL</Text>
@@ -91,18 +94,20 @@ export default function TimetableSplitStatsCard({
         <View style={styles.targetPill}>
           <Text style={styles.targetText}>🎯 75% Target</Text>
         </View>
-      </TouchableOpacity>
+      </AnimatedPressable>
 
       {/* Dual Split Cards: Theory vs Lab */}
       <View style={styles.cardsRow}>
         {/* Theory Card */}
-        <TouchableOpacity
+        <AnimatedPressable
+          scaleTo={0.96}
+          glowOnPress={true}
+          glowColor={theoryColor}
           style={[
             styles.splitCard,
             {borderColor: theoryColor + '33'},
           ]}
-          onPress={handleTheoryPress}
-          activeOpacity={0.88}>
+          onPress={handleTheoryPress}>
           <View style={styles.cardHeader}>
             <View style={styles.cardIconWrap}>
               <Text style={styles.cardIcon}>📚</Text>
@@ -145,16 +150,18 @@ export default function TimetableSplitStatsCard({
                 : '🛡️ Don\'t miss next'}
             </Text>
           </View>
-        </TouchableOpacity>
+        </AnimatedPressable>
 
         {/* Lab Card */}
-        <TouchableOpacity
+        <AnimatedPressable
+          scaleTo={0.96}
+          glowOnPress={true}
+          glowColor={labColor}
           style={[
             styles.splitCard,
             {borderColor: labColor + '33'},
           ]}
-          onPress={handleLabPress}
-          activeOpacity={0.88}>
+          onPress={handleLabPress}>
           <View style={styles.cardHeader}>
             <View style={[styles.cardIconWrap, {backgroundColor: '#8B5CF620'}]}>
               <Text style={styles.cardIcon}>🧪</Text>
@@ -197,7 +204,7 @@ export default function TimetableSplitStatsCard({
                 : '🛡️ Don\'t miss lab'}
             </Text>
           </View>
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
     </View>
   );

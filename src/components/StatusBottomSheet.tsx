@@ -10,6 +10,7 @@ import {AttendanceStatus, LectureInstance} from '../types';
 import {Colors, getStatusColor} from '../theme/colors';
 import {Spacing} from '../theme/spacing';
 import {Typography} from '../theme/typography';
+import AnimatedPressable from './AnimatedPressable';
 
 interface StatusOption {
   status: AttendanceStatus;
@@ -80,16 +81,19 @@ export default function StatusBottomSheet({lecture, onSelect, onClose, onEdit, o
               const color = getStatusColor(option.status);
               const isSelected = activeLecture?.status === option.status;
               return (
-                <TouchableOpacity
+                <AnimatedPressable
                   key={option.status}
+                  scaleTo={0.96}
+                  glowOnPress={true}
+                  glowColor={color}
+                  hapticType="impactMedium"
                   style={[
                     styles.option,
                     isSelected && {backgroundColor: color + '22', borderColor: color},
                   ]}
                   onPress={() => {
                     onSelect(option.status);
-                  }}
-                  activeOpacity={0.7}>
+                  }}>
                   <View style={[styles.iconContainer, {backgroundColor: color + '33'}]}>
                     <Text style={[styles.icon, {color}]}>{option.icon}</Text>
                   </View>
@@ -102,7 +106,7 @@ export default function StatusBottomSheet({lecture, onSelect, onClose, onEdit, o
                   {isSelected && (
                     <View style={[styles.selectedDot, {backgroundColor: color}]} />
                   )}
-                </TouchableOpacity>
+                </AnimatedPressable>
               );
             })}
 

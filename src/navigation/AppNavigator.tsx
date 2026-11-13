@@ -20,32 +20,16 @@ import ChangelogScreen from '../screens/ChangelogScreen';
 import StudentSearchScreen from '../screens/StudentSearchScreen';
 import PublicProfileScreen from '../screens/PublicProfileScreen';
 import PhoneAuthScreen from '../screens/PhoneAuthScreen';
+import AnimatedCustomTabBar from '../components/AnimatedCustomTabBar';
 import {RootStackParamList, BottomTabParamList} from '../types';
 
 const Tab = createBottomTabNavigator<BottomTabParamList>();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-const tabIcons: Record<string, string> = {
-  Timetable: '📅',
-  Todos: '📝',
-  Peers: '👥',
-  Stats: '📊',
-  Calendar: '🗓️',
-  Settings: '⚙️',
-};
-
-function TabBarIcon({name, focused}: {name: string; focused: boolean}) {
-  return (
-    <View style={[styles.tabIconContainer, focused && styles.tabIconActive]}>
-      <Text style={styles.tabIconEmoji}>{tabIcons[name]}</Text>
-    </View>
-  );
-}
-
 function StatsStack() {
   const S = createNativeStackNavigator();
   return (
-    <S.Navigator screenOptions={{headerShown: false}}>
+    <S.Navigator screenOptions={{headerShown: false, animation: 'slide_from_right'}}>
       <S.Screen name="SubjectList" component={SubjectListScreen} />
       <S.Screen name="SubjectDetail" component={SubjectDetailScreen} />
       <S.Screen name="Reports" component={ReportsScreen} />
@@ -56,16 +40,10 @@ function StatsStack() {
 function MainTabs() {
   return (
     <Tab.Navigator
-      screenOptions={({route}) => ({
+      tabBar={props => <AnimatedCustomTabBar {...props} />}
+      screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textMuted,
-        tabBarLabelStyle: styles.tabBarLabel,
-        tabBarIcon: ({focused}) => (
-          <TabBarIcon name={route.name} focused={focused} />
-        ),
-      })}>
+      }}>
       <Tab.Screen name="Timetable" component={TimetableScreen} />
       <Tab.Screen name="Todos" component={TodoListScreen} options={{title: 'To-Do'}} />
       <Tab.Screen name="Peers" component={StudentSearchScreen} options={{title: 'Campus'}} />

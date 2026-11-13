@@ -34,6 +34,7 @@ import {executeSql, rowsToArray} from '../db/database';
 import {TimetableEntry, RootStackParamList, LectureInstance, AttendanceStatus} from '../types';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import Toast from 'react-native-toast-message';
+import AnimatedPressable from '../components/AnimatedPressable';
 import HeroDashboardCard from '../components/HeroDashboardCard';
 import TimetableSplitStatsCard from '../components/TimetableSplitStatsCard';
 import LectureCard from '../components/LectureCard';
@@ -350,30 +351,50 @@ export default function TimetableScreen() {
           <Text style={styles.monthLabel}>{format(selectedDate, 'EEEE, MMMM d, yyyy')} ⚙️</Text>
         </TouchableOpacity>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.headerActionsScroll}>
-          <TouchableOpacity
+          <AnimatedPressable
+            scaleTo={0.92}
+            hapticType="impactLight"
             style={[styles.viewToggleBtn, viewMode === 'grid' && styles.viewToggleBtnActive]}
             onPress={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}>
             <Text style={styles.viewToggleText}>{viewMode === 'list' ? '🗺️ Grid' : '📱 List'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          </AnimatedPressable>
+          <AnimatedPressable
+            scaleTo={0.92}
+            hapticType="impactLight"
             style={[styles.holidayBtn, {borderColor: '#F59E0B66', backgroundColor: '#F59E0B15'}]}
             onPress={() => navigation.navigate('PublicProfile', {})}>
             <Text style={[styles.holidayBtnText, {color: '#F59E0B'}]}>🔥 {streakCount}d Streak</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.holidayBtn} onPress={() => setBunkModalVisible(true)}>
+          </AnimatedPressable>
+          <AnimatedPressable
+            scaleTo={0.92}
+            hapticType="impactLight"
+            style={styles.holidayBtn}
+            onPress={() => setBunkModalVisible(true)}>
             <Text style={styles.holidayBtnText}>🔮 Predict</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.holidayBtn} onPress={() => setAchievementsModalVisible(true)}>
+          </AnimatedPressable>
+          <AnimatedPressable
+            scaleTo={0.92}
+            hapticType="impactLight"
+            style={styles.holidayBtn}
+            onPress={() => setAchievementsModalVisible(true)}>
             <Text style={styles.holidayBtnText}>🏆 Badges</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.holidayBtn} onPress={() => openBulkSheetForDate(selectedDate)}>
+          </AnimatedPressable>
+          <AnimatedPressable
+            scaleTo={0.92}
+            hapticType="impactLight"
+            style={styles.holidayBtn}
+            onPress={() => openBulkSheetForDate(selectedDate)}>
             <Text style={styles.holidayBtnText}>🌴 Holiday</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          </AnimatedPressable>
+          <AnimatedPressable
+            scaleTo={0.92}
+            glowOnPress={true}
+            glowColor={Colors.primary}
+            hapticType="impactMedium"
             style={styles.addBtn}
             onPress={() => navigation.navigate('AddTimetableEntry', {})}>
             <Text style={styles.addBtnText}>+ Add</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         </ScrollView>
       </View>
 
@@ -403,17 +424,17 @@ export default function TimetableScreen() {
           const isSelected = format(date, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
           const isTodayDate = isToday(date);
           return (
-            <TouchableOpacity
+            <AnimatedPressable
               key={i}
+              scaleTo={0.92}
+              hapticType="selection"
+              glowOnPress={true}
+              glowColor="#A855F7"
               style={[
                 styles.dayCell,
                 isSelected && styles.dayCellSelected,
               ]}
               onPress={() => {
-                ReactNativeHapticFeedback.trigger('selection', {
-                  enableVibrateFallback: true,
-                  ignoreAndroidSystemSettings: false,
-                });
                 setSelectedDate(date);
               }}>
               <Text style={[styles.dayName, isSelected && styles.dayNameSelected]}>
@@ -426,7 +447,7 @@ export default function TimetableScreen() {
               ]}>
                 {format(date, 'd')}
               </Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
           );
         })}
       </View>

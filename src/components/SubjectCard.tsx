@@ -1,9 +1,10 @@
 import React from 'react';
-import {View, Text, TouchableOpacity, StyleSheet} from 'react-native';
+import {View, Text, StyleSheet} from 'react-native';
 import {Colors} from '../theme/colors';
 import {Spacing} from '../theme/spacing';
 import {Subject, AttendanceStats} from '../types';
 import CircularProgress from './CircularProgress';
+import AnimatedPressable from './AnimatedPressable';
 
 interface SubjectCardProps {
   subject: Subject;
@@ -15,12 +16,19 @@ interface SubjectCardProps {
 export default function SubjectCard({subject, stats, streak = 0, onPress}: SubjectCardProps) {
   const color = subject.color;
   const isFrozen = subject.is_frozen === 1;
+  const isLab = subject.subject_type === 'lab';
 
   return (
-    <TouchableOpacity
-      style={[styles.card, isFrozen && styles.cardFrozen]}
-      onPress={onPress}
-      activeOpacity={0.85}>
+    <AnimatedPressable
+      scaleTo={0.97}
+      glowOnPress={true}
+      glowColor={color}
+      style={[
+        styles.card,
+        isFrozen && styles.cardFrozen,
+        {borderColor: color + '33'},
+      ]}
+      onPress={onPress}>
       {/* Left accent bar */}
       <View style={[styles.accentBar, {backgroundColor: isFrozen ? Colors.textMuted : color}]} />
       <View style={styles.content}>
@@ -30,6 +38,11 @@ export default function SubjectCard({subject, stats, streak = 0, onPress}: Subje
               <Text style={styles.name} numberOfLines={1}>
                 {subject.name}
               </Text>
+              <View style={[styles.typeBadge, {backgroundColor: isLab ? '#0891B222' : '#8B5CF622'}]}>
+                <Text style={[styles.typeBadgeText, {color: isLab ? '#06B6D4' : '#A78BFA'}]}>
+                  {isLab ? '🧪 Lab' : '📚 Theory'}
+                </Text>
+              </View>
               {streak > 0 && !isFrozen && (
                 <View style={styles.streakBadge}>
                   <Text style={styles.streakText}>🔥 {streak}</Text>
@@ -70,7 +83,7 @@ export default function SubjectCard({subject, stats, streak = 0, onPress}: Subje
           </Text>
         </View>
       </View>
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
 }
 
@@ -106,6 +119,15 @@ const styles = StyleSheet.create({
   info: {
     flex: 1,
     marginRight: 12,
+  },
+  typeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  typeBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
   titleRow: {
     flexDirection: 'row',

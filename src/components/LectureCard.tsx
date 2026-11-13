@@ -2,7 +2,6 @@ import React from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
 } from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
@@ -12,6 +11,7 @@ import {Colors, getStatusColor} from '../theme/colors';
 import {Spacing} from '../theme/spacing';
 import {Typography} from '../theme/typography';
 import {calculateDurationHours} from '../db/queries/lectureInstances';
+import AnimatedPressable from './AnimatedPressable';
 
 interface Props {
   lecture: LectureInstance;
@@ -88,10 +88,12 @@ export default function LectureCard({lecture, onPress, onLongPress}: Props) {
   }
 
   return (
-    <TouchableOpacity
+    <AnimatedPressable
       onPress={handlePress}
       onLongPress={handleLongPress}
-      activeOpacity={0.7}
+      scaleTo={0.97}
+      glowOnPress={true}
+      glowColor={subjectColor}
       style={[
         styles.container,
         {borderColor: cardBorderColor},
@@ -171,7 +173,7 @@ export default function LectureCard({lecture, onPress, onLongPress}: Props) {
           ) : null}
         </View>
       </View>
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
 }
 

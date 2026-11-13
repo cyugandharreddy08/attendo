@@ -1,9 +1,10 @@
 import React from 'react';
-import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
+import {View, Text, StyleSheet} from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import {Colors} from '../theme/colors';
 import {Spacing} from '../theme/spacing';
 import {Typography} from '../theme/typography';
+import AnimatedPressable from './AnimatedPressable';
 
 interface Props {
   totalPercent: number;
@@ -38,13 +39,15 @@ export default function HeroDashboardCard({
   };
 
   return (
-    <TouchableOpacity
+    <AnimatedPressable
+      scaleTo={0.98}
+      glowOnPress={true}
+      glowColor={statusColor}
       style={[
         styles.card,
-        {borderColor: statusColor + '44'},
+        {borderColor: statusColor + '55'},
       ]}
-      onPress={handlePress}
-      activeOpacity={0.85}>
+      onPress={handlePress}>
       <View style={styles.topRow}>
         <View style={styles.badgeContainer}>
           <View style={[styles.statusDot, {backgroundColor: statusColor}]} />
@@ -84,7 +87,7 @@ export default function HeroDashboardCard({
           <Text style={styles.bunkSubtext}>Target: 75% Minimum</Text>
         </View>
       </View>
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
 }
 

@@ -71,6 +71,9 @@ export async function scheduleClassReminders(leadMinutes: number = 10): Promise<
         const timestampTrigger: TimestampTrigger = {
           type: TriggerType.TIMESTAMP,
           timestamp: triggerDate.getTime(),
+          alarmManager: {
+            allowWhileIdle: true,
+          },
         };
 
         await notifee.createTriggerNotification(
@@ -119,15 +122,16 @@ export async function scheduleEndOfDayNudge(hour: number = 20, minute: number = 
       type: TriggerType.TIMESTAMP,
       timestamp: trigger.getTime(),
       repeatFrequency: RepeatFrequency.DAILY,
+      alarmManager: {
+        allowWhileIdle: true,
+      },
     };
 
-    // We use a trigger notification; the actual content is dynamic.
-    // We intercept it via a background handler before display.
     await notifee.createTriggerNotification(
       {
         id: NOTIFICATION_ID,
-        title: 'Attendance Tracker',
-        body: 'Checking your classes...',
+        title: 'Attendance Tracker 📚',
+        body: 'Class hours completed! Tap to mark your attendance and maintain your streak.',
         android: {
           channelId: CHANNEL_ID,
           importance: AndroidImportance.HIGH,
@@ -219,6 +223,9 @@ export async function scheduleTaskAlarm(task: TodoItem): Promise<void> {
       const timestampTrigger: TimestampTrigger = {
         type: TriggerType.TIMESTAMP,
         timestamp: triggerTime,
+        alarmManager: {
+          allowWhileIdle: true,
+        },
       };
 
       await notifee.createTriggerNotification(
