@@ -35,9 +35,12 @@ Thumbs.db
 hs_err_pid*.log
 replay_pid*.log
 
-# Keystores (preserve debug keystore for quick testing)
+# Keystores & OTA Signing Keys
 *.keystore
 !debug.keystore
+*.pem
+ota_keys/
+dist_ota/
 
 # Metro / Buck
 .buckd

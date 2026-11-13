@@ -10,6 +10,9 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.load
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.soloader.SoLoader
+import com.tracker75.ota.OTABundleManager
+import com.tracker75.ota.OTAHealthMonitor
+import com.tracker75.ota.OTAPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -17,10 +20,14 @@ class MainApplication : Application(), ReactApplication {
         object : DefaultReactNativeHost(this) {
             override fun getPackages(): List<ReactPackage> =
                 PackageList(this).packages.apply {
-                    // Packages that cannot be autolinked yet can be added manually here
+                    add(OTAPackage())
                 }
 
             override fun getJSMainModuleName(): String = "index"
+
+            override fun getJSBundleFile(): String? {
+                return OTABundleManager.getLaunchBundlePath(this@MainApplication) ?: super.getJSBundleFile()
+            }
 
             override fun getUseDeveloperSupport(): Boolean = BuildConfig.DEBUG
 
@@ -33,6 +40,9 @@ class MainApplication : Application(), ReactApplication {
 
     override fun onCreate() {
         super.onCreate()
+        // Native Startup Health Check & Atomic Crash-Loop Rollback Watchdog
+        OTAHealthMonitor.onAppLaunch(this)
+
         SoLoader.init(this, false)
         if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
             load()

@@ -18,7 +18,7 @@ import {linking} from './src/navigation/linking';
 import {initDatabase} from './src/db/database';
 import {generateTodayInstances} from './src/db/queries/lectureInstances';
 import {scheduleEndOfDayNudge, scheduleClassReminders} from './src/services/NotificationService';
-import {checkForJSUpdate, checkForNativeUpdate} from './src/services/OTAService';
+import {ModernOTAService, checkForJSUpdate, checkForNativeUpdate} from './src/services/OTAService';
 import ForceUpdateModal from './src/components/ForceUpdateModal';
 import {Colors} from './src/theme/colors';
 
@@ -138,6 +138,8 @@ function App(): React.JSX.Element {
         await generateTodayInstances();
         await scheduleEndOfDayNudge();
         await scheduleClassReminders(10);
+        // Enterprise OTA Boot Confirmation & Check
+        ModernOTAService.confirmBoot();
         checkForJSUpdate();
         checkForNativeUpdate();
       } catch (e) {
