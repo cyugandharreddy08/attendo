@@ -17,5 +17,5 @@ export const EDGE_FUNCTIONS = {
 export const GEMINI_MODEL = 'gemini-2.0-flash';
 
 // App version info
-export const APP_VERSION = '8.0.0';
-export const APP_VERSION_CODE = 800;
+export const APP_VERSION = '8.0.1';
+export const APP_VERSION_CODE = 801;
