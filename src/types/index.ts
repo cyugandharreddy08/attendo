@@ -139,6 +139,7 @@ export type RootStackParamList = {
   BugReport: undefined;
   MyBugs: undefined;
   Changelog: undefined;
+  AccountSync: undefined;
   PhoneAuth: {onSuccess?: () => void} | undefined;
   StudentAuth: {onSuccess?: () => void} | undefined;
   StudentSearch: {initialCollege?: string} | undefined;
@@ -149,7 +150,7 @@ export type RootStackParamList = {
 export type BottomTabParamList = {
   Timetable: undefined;
   Todos: undefined;
-  Peers: undefined;
+  Peers?: undefined;
   Stats: undefined;
   Calendar: undefined;
   Settings: undefined;

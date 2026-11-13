@@ -8,6 +8,7 @@ import {
   Switch,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {checkForJSUpdate, checkForNativeUpdate} from '../services/OTAService';
@@ -25,6 +26,8 @@ import {exportDataToJSON, importDataFromJSON} from '../db/queries/backup';
 import {useNavigation, useIsFocused} from '@react-navigation/native';
 import {AuthService} from '../services/AuthService';
 import {StudentProfile} from '../types';
+import AnimatedPressable from '../components/AnimatedPressable';
+import {AccountSyncService} from '../services/AccountSyncService';
 
 const REMINDER_OPTIONS = [
   {label: '10 mins', value: 10},
@@ -42,10 +45,22 @@ export default function SettingsScreen() {
   const [currentUser, setCurrentUser] = useState<StudentProfile | null>(null);
   const [syncingProfile, setSyncingProfile] = useState(false);
 
+  const [syncKey, setSyncKey] = useState<string>('...');
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [syncingCloud, setSyncingCloud] = useState<boolean>(false);
+  const [keyCopied, setKeyCopied] = useState<boolean>(false);
+
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [reminderLead, setReminderLead] = useState(10);
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [importJsonText, setImportJsonText] = useState('');
+
+  const loadAccountSyncInfo = useCallback(async () => {
+    const key = await AccountSyncService.getOrGenerateSyncKey();
+    setSyncKey(key);
+    const lastTime = await AccountSyncService.getLastSyncTime();
+    setLastSyncTime(lastTime);
+  }, []);
 
   const loadUserProfile = useCallback(async () => {
     const user = await AuthService.getCurrentUser();
@@ -54,9 +69,28 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     if (isFocused) {
+      loadAccountSyncInfo();
       loadUserProfile();
     }
-  }, [isFocused, loadUserProfile]);
+  }, [isFocused, loadAccountSyncInfo, loadUserProfile]);
+
+  const handleCopySecurityCode = () => {
+    Clipboard.setString(syncKey);
+    setKeyCopied(true);
+    setTimeout(() => setKeyCopied(false), 2000);
+  };
+
+  const handleQuickCloudSync = async () => {
+    setSyncingCloud(true);
+    const result = await AccountSyncService.backupToCloud(syncKey);
+    setSyncingCloud(false);
+    if (result.success) {
+      setLastSyncTime(new Date().toISOString());
+      Alert.alert('Cloud Backup Complete', result.message);
+    } else {
+      Alert.alert('Sync Failed', result.message);
+    }
+  };
 
   const handleSyncProfile = async () => {
     setSyncingProfile(true);
@@ -182,98 +216,59 @@ export default function SettingsScreen() {
       contentContainerStyle={styles.content}>
       <Text style={styles.pageTitle}>Settings</Text>
 
-      {/* Campus Identity & Public Profile Card */}
-      {currentUser ? (
-        <View style={styles.profileCard}>
-          <View style={styles.profileCardHeader}>
-            <View style={styles.profileAvatar}>
-              <Text style={styles.profileAvatarText}>
-                {currentUser.full_name.substring(0, 2).toUpperCase()}
-              </Text>
-            </View>
-            <View style={{flex: 1}}>
-              <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
-                <Text style={styles.profileName}>{currentUser.full_name}</Text>
-                <Text style={styles.profileBadge}>✓ Student</Text>
-              </View>
-              <Text style={styles.profileUsername}>@{currentUser.username}</Text>
-              <Text style={styles.profileCollege} numberOfLines={1}>
-                🏛️ {currentUser.college} • {currentUser.academic_year}
-              </Text>
-            </View>
+      {/* Account Security Code & Instant Cloud Sync Card */}
+      <View style={styles.vaultCard}>
+        <View style={styles.vaultCardHeader}>
+          <View style={styles.vaultBadge}>
+            <View style={styles.vaultBadgeDot} />
+            <Text style={styles.vaultBadgeText}>Cloud Vault Active</Text>
           </View>
-
-          <View style={styles.profileStatsRow}>
-            <View style={styles.profileStatItem}>
-              <Text style={styles.profileStatVal}>{currentUser.overall_percent}%</Text>
-              <Text style={styles.profileStatLbl}>Attendance</Text>
-            </View>
-            <View style={styles.profileStatDivider} />
-            <View style={styles.profileStatItem}>
-              <Text style={[styles.profileStatVal, {color: '#F59E0B'}]}>
-                🔥 {currentUser.current_streak}d
-              </Text>
-              <Text style={styles.profileStatLbl}>Streak</Text>
-            </View>
-            <View style={styles.profileStatDivider} />
-            <View style={styles.profileStatItem}>
-              <Text style={styles.profileStatVal}>{currentUser.theory_percent}%</Text>
-              <Text style={styles.profileStatLbl}>Theory</Text>
-            </View>
-            <View style={styles.profileStatDivider} />
-            <View style={styles.profileStatItem}>
-              <Text style={styles.profileStatVal}>{currentUser.lab_percent}%</Text>
-              <Text style={styles.profileStatLbl}>Labs</Text>
-            </View>
-          </View>
-
-          <View style={styles.profileActionsRow}>
-            <TouchableOpacity
-              style={styles.profileSyncBtn}
-              onPress={handleSyncProfile}
-              disabled={syncingProfile}>
-              {syncingProfile ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Text style={styles.profileSyncBtnText}>🔄 Sync Cloud Stats</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.profileViewBtn}
-              onPress={() => navigation.navigate('PublicProfile', {profile: currentUser})}>
-              <Text style={styles.profileViewBtnText}>View Public Profile 🔗</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={{flexDirection: 'row', justifyContent: 'space-between', marginTop: 10}}>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('StudentSearch', {initialCollege: currentUser.college})}>
-              <Text style={styles.profileSecondaryLink}>🔍 Campus Directory</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleLogout}>
-              <Text style={[styles.profileSecondaryLink, {color: '#EF4444'}]}>
-                Switch / Sign Out
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.vaultHint}>No Password • 1-Tap Sync</Text>
         </View>
-      ) : (
-        <View style={styles.loginBannerCard}>
-          <View style={{flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6}}>
-            <Text style={{fontSize: 24}}>🎓</Text>
-            <Text style={styles.loginBannerTitle}>Join Campus Community</Text>
-          </View>
-          <Text style={styles.loginBannerSubtitle}>
-            Connect your mobile number, claim your @username, showcase your LeetCode attendance streak, and get discovered by classmates from your institute!
+
+        <Text style={styles.vaultLabel}>YOUR ACCOUNT SECURITY CODE</Text>
+
+        <View style={styles.vaultCodeBox}>
+          <Text style={styles.vaultCodeText} selectable>
+            {syncKey}
           </Text>
           <TouchableOpacity
-            style={styles.loginBannerBtn}
-            onPress={() => navigation.navigate('PhoneAuth')}>
-            <Text style={styles.loginBannerBtnText}>Connect Phone & Profile →</Text>
+            style={[styles.vaultCopyBtn, keyCopied && styles.vaultCopyBtnActive]}
+            onPress={handleCopySecurityCode}
+            activeOpacity={0.7}>
+            <Text style={styles.vaultCopyBtnText}>{keyCopied ? '✓' : '📋'}</Text>
           </TouchableOpacity>
         </View>
-      )}
+
+        <Text style={styles.vaultSubtext}>
+          {lastSyncTime
+            ? `🟢 Last backed up: ${new Date(lastSyncTime).toLocaleDateString()} at ${new Date(
+                lastSyncTime,
+              ).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`
+            : '⚪ Backup your data to preserve attendance across reinstalls'}
+        </Text>
+
+        <View style={styles.vaultActionsRow}>
+          <AnimatedPressable
+            style={styles.vaultSyncBtn}
+            onPress={handleQuickCloudSync}
+            disabled={syncingCloud}
+            hapticType="impactMedium">
+            {syncingCloud ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <Text style={styles.vaultSyncBtnText}>⚡ Backup Now</Text>
+            )}
+          </AnimatedPressable>
+
+          <AnimatedPressable
+            style={styles.vaultManageBtn}
+            onPress={() => navigation.navigate('AccountSync')}
+            hapticType="impactLight">
+            <Text style={styles.vaultManageBtnText}>Restore / Link Phone →</Text>
+          </AnimatedPressable>
+        </View>
+      </View>
 
       <SettingsSection title="Class Start Notifications">
         <SettingsRow
@@ -596,150 +591,130 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm + 2,
     borderRadius: Spacing.cardRadius,
   },
-  profileCard: {
-    backgroundColor: Colors.card,
-    borderRadius: 16,
+  vaultCard: {
+    backgroundColor: '#0F172A',
+    borderRadius: 20,
     padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: '#7C3AED55',
+    borderWidth: 1.5,
+    borderColor: 'rgba(124, 58, 237, 0.4)',
+    shadowColor: '#7C3AED',
+    shadowOffset: {width: 0, height: 6},
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 6,
     marginBottom: Spacing.lg,
+    marginHorizontal: Spacing.screenPad,
   },
-  profileCardHeader: {
+  vaultCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
-  profileAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
+  vaultBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
   },
-  profileAvatarText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 18,
+  vaultBadgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+    marginRight: 6,
   },
-  profileName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  profileBadge: {
+  vaultBadgeText: {
+    color: '#10B981',
     fontSize: 10,
-    backgroundColor: '#38BDF822',
-    color: '#38BDF8',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 4,
     fontWeight: '700',
+    letterSpacing: 0.3,
   },
-  profileUsername: {
-    fontSize: 12,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-  profileCollege: {
+  vaultHint: {
     fontSize: 11,
-    color: Colors.textMuted,
-    marginTop: 2,
+    color: '#64748B',
+    fontWeight: '500',
   },
-  profileStatsRow: {
-    flexDirection: 'row',
-    backgroundColor: '#1E1E2E88',
-    borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginTop: 12,
-    marginBottom: 12,
-    alignItems: 'center',
-    justifyContent: 'space-around',
-  },
-  profileStatItem: {
-    alignItems: 'center',
-  },
-  profileStatVal: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: Colors.text,
-  },
-  profileStatLbl: {
+  vaultLabel: {
     fontSize: 10,
-    color: Colors.textMuted,
-    marginTop: 1,
-  },
-  profileStatDivider: {
-    width: 1,
-    height: 20,
-    backgroundColor: Colors.border,
-  },
-  profileActionsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  profileSyncBtn: {
-    flex: 1,
-    backgroundColor: Colors.primary,
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  profileSyncBtnText: {
-    color: '#FFFFFF',
+    color: '#94A3B8',
     fontWeight: '700',
-    fontSize: 12,
+    letterSpacing: 1,
+    marginBottom: 6,
   },
-  profileViewBtn: {
-    flex: 1,
-    backgroundColor: '#1E1E2E',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 10,
-    paddingVertical: 10,
+  vaultCodeBox: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  profileViewBtnText: {
-    color: Colors.text,
-    fontWeight: '600',
-    fontSize: 12,
-  },
-  profileSecondaryLink: {
-    fontSize: 12,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-  loginBannerCard: {
-    backgroundColor: '#7C3AED18',
-    borderRadius: 16,
-    padding: Spacing.md,
+    justifyContent: 'space-between',
+    backgroundColor: '#07090E',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: '#7C3AED44',
-    marginBottom: Spacing.lg,
+    borderColor: 'rgba(139, 92, 246, 0.4)',
+    marginBottom: 10,
   },
-  loginBannerTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: Colors.text,
+  vaultCodeText: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#A78BFA',
+    letterSpacing: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
-  loginBannerSubtitle: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    lineHeight: 18,
+  vaultCopyBtn: {
+    backgroundColor: 'rgba(124, 58, 237, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  vaultCopyBtnActive: {
+    backgroundColor: '#059669',
+  },
+  vaultCopyBtnText: {
+    fontSize: 14,
+    color: '#F8FAFC',
+    fontWeight: '700',
+  },
+  vaultSubtext: {
+    fontSize: 11,
+    color: '#94A3B8',
+    lineHeight: 16,
     marginBottom: 12,
   },
-  loginBannerBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
+  vaultActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
   },
-  loginBannerBtnText: {
+  vaultSyncBtn: {
+    flex: 1,
+    backgroundColor: '#7C3AED',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vaultSyncBtnText: {
     color: '#FFFFFF',
     fontWeight: '700',
-    fontSize: 13,
+    fontSize: 12,
+  },
+  vaultManageBtn: {
+    flex: 1.2,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vaultManageBtnText: {
+    color: '#E2E8F0',
+    fontWeight: '600',
+    fontSize: 12,
   },
 });

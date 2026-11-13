@@ -262,207 +262,7 @@ export class CloudBackupService {
       const rawBackup = data[0].payload;
       const parsed: CloudBackupPayload = typeof rawBackup === 'string' ? JSON.parse(rawBackup) : rawBackup;
 
-      // 1. Validate complete backup payload before modifying database
-      const validation = validateBackupPayload(parsed);
-      if (!validation.isValid) {
-        return {
-          success: false,
-          restored: false,
-          subjectsCount: 0,
-          classesCount: 0,
-          message: `Corrupted backup payload: ${validation.error}`,
-        };
-      }
-
-      // Check if local database has data
-      const localSubCountRes = await executeSql('SELECT COUNT(*) as count FROM subjects');
-      const localCount = rowsToArray<{ count: number }>(localSubCountRes)[0]?.count ?? 0;
-
-      // 2. Pre-restore snapshot in case of failure (Atomic Rollback Safety)
-      const rollbackSnapshot = await this.exportUserData();
-
-      try {
-        // If 'replace' mode, clear existing entries
-        if (mode === 'replace') {
-          await executeInTransaction([
-            { sql: 'DELETE FROM todos', params: [] },
-            { sql: 'DELETE FROM overrides', params: [] },
-            { sql: 'DELETE FROM lecture_instances', params: [] },
-            { sql: 'DELETE FROM timetable', params: [] },
-            { sql: 'DELETE FROM subjects', params: [] },
-          ]);
-        }
-
-        // 3. Foreign Key Translation Map (Old subject ID -> New subject ID)
-        const subjectIdMap = new Map<number, number>();
-        const timetableIdMap = new Map<number, number>();
-
-        for (const sub of parsed.subjects) {
-          if (mode === 'merge') {
-            // Check for existing subject with identical name
-            const existRes = await executeSql('SELECT id FROM subjects WHERE name = ?', [sub.name]);
-            const existing = rowsToArray<{ id: number }>(existRes);
-
-            if (existing.length > 0) {
-              subjectIdMap.set(sub.id, existing[0].id);
-              continue;
-            }
-          }
-
-          const insertRes = await executeSql(
-            `INSERT INTO subjects (name, color, target_percent, subject_type, is_frozen, past_attended, past_total, credits)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              sub.name,
-              sub.color || '#7C3AED',
-              sub.target_percent || 75,
-              sub.subject_type || 'theory',
-              sub.is_frozen || 0,
-              sub.past_attended || 0,
-              sub.past_total || 0,
-              sub.credits || 1,
-            ]
-          );
-          subjectIdMap.set(sub.id, insertRes.insertId);
-        }
-
-        // 4. Restore Timetable entries with foreign key translation
-        const timetableQueries: Array<{ sql: string; params: any[] }> = [];
-        for (const tt of parsed.timetable || []) {
-          const mappedSubId = subjectIdMap.get(tt.subject_id);
-          if (!mappedSubId) continue;
-
-          // Duplicate detection considering subject identity, weekday, start_time, and end_time
-          const ttCheck = await executeSql(
-            'SELECT id FROM timetable WHERE subject_id = ? AND day_of_week = ? AND start_time = ? AND end_time = ?',
-            [mappedSubId, tt.day_of_week, tt.start_time, tt.end_time]
-          );
-          const existingTT = rowsToArray<{ id: number }>(ttCheck);
-
-          if (existingTT.length > 0) {
-            timetableIdMap.set(tt.id, existingTT[0].id);
-          } else {
-            const insertTT = await executeSql(
-              `INSERT INTO timetable (subject_id, day_of_week, start_time, end_time, room)
-               VALUES (?, ?, ?, ?, ?)`,
-              [mappedSubId, tt.day_of_week, tt.start_time, tt.end_time, tt.room || '']
-            );
-            timetableIdMap.set(tt.id, insertTT.insertId);
-          }
-        }
-
-        // 5. Restore Attendance Instances
-        const instanceQueries: Array<{ sql: string; params: any[] }> = [];
-        for (const inst of parsed.instances || []) {
-          const mappedSubId = subjectIdMap.get(inst.subject_id);
-          if (!mappedSubId) continue;
-
-          const checkInst = await executeSql(
-            'SELECT id FROM lecture_instances WHERE subject_id = ? AND date = ? AND start_time = ?',
-            [mappedSubId, inst.date, inst.start_time]
-          );
-
-          if (rowsToArray(checkInst).length === 0) {
-            instanceQueries.push({
-              sql: `INSERT INTO lecture_instances
-                    (subject_id, date, day_of_week, start_time, end_time, status, marked_at, is_override, room, notes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              params: [
-                mappedSubId,
-                inst.date,
-                inst.day_of_week,
-                inst.start_time,
-                inst.end_time,
-                inst.status,
-                inst.marked_at,
-                inst.is_override || 0,
-                inst.room || '',
-                inst.notes || '',
-              ],
-            });
-          }
-        }
-        if (instanceQueries.length > 0) {
-          await executeInTransaction(instanceQueries);
-        }
-
-        // 6. Restore Overrides with remapped timetable_id
-        const overrideQueries: Array<{ sql: string; params: any[] }> = [];
-        for (const ovr of parsed.overrides || []) {
-          const mappedTTId = timetableIdMap.get(ovr.timetable_id);
-          if (!mappedTTId) continue;
-
-          overrideQueries.push({
-            sql: `INSERT INTO overrides (timetable_id, date, new_start_time, new_day, reason)
-                  VALUES (?, ?, ?, ?, ?)`,
-            params: [mappedTTId, ovr.date, ovr.new_start_time || null, ovr.new_day || null, ovr.reason || ''],
-          });
-        }
-        if (overrideQueries.length > 0) {
-          await executeInTransaction(overrideQueries);
-        }
-
-        // 7. Restore Todos with remapped subject_id
-        const todoQueries: Array<{ sql: string; params: any[] }> = [];
-        for (const todo of parsed.todos || []) {
-          const mappedSubId = todo.subject_id ? subjectIdMap.get(todo.subject_id) || null : null;
-
-          todoQueries.push({
-            sql: `INSERT INTO todos (title, subject_id, due_date, due_time, priority, is_completed, notes, created_at)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            params: [
-              todo.title,
-              mappedSubId,
-              todo.due_date,
-              todo.due_time || null,
-              todo.priority || 'medium',
-              todo.is_completed || 0,
-              todo.notes || '',
-              todo.created_at || new Date().toISOString(),
-            ],
-          });
-        }
-        if (todoQueries.length > 0) {
-          await executeInTransaction(todoQueries);
-        }
-
-        // 8. Regenerate current timetable slots
-        await generateTodayInstances();
-
-        return {
-          success: true,
-          restored: true,
-          subjectsCount: parsed.subjects.length,
-          classesCount: parsed.instances.length,
-          message: `Successfully restored ${parsed.subjects.length} subjects & ${parsed.instances.length} attendance records from cloud (${mode} mode)!`,
-        };
-      } catch (innerErr: any) {
-        // Rollback to pre-restore snapshot if restore encounters a fatal SQLite transaction failure
-        console.error('Fatal restore error, executing rollback:', innerErr);
-        // Clean partial state
-        await executeInTransaction([
-          { sql: 'DELETE FROM todos', params: [] },
-          { sql: 'DELETE FROM overrides', params: [] },
-          { sql: 'DELETE FROM lecture_instances', params: [] },
-          { sql: 'DELETE FROM timetable', params: [] },
-          { sql: 'DELETE FROM subjects', params: [] },
-        ]);
-        // Restore pre-snapshot
-        for (const s of rollbackSnapshot.subjects) {
-          await executeSql(
-            `INSERT INTO subjects (id, name, color, target_percent, subject_type, is_frozen, past_attended, past_total, credits)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [s.id, s.name, s.color, s.target_percent, s.subject_type, s.is_frozen, s.past_attended, s.past_total, s.credits]
-          );
-        }
-        return {
-          success: false,
-          restored: false,
-          subjectsCount: 0,
-          classesCount: 0,
-          message: `Restoration failed: ${innerErr?.message}. Local database safely rolled back.`,
-        };
-      }
+      return await this.applyRestoredPayload(parsed, mode);
     } catch (e: any) {
       return {
         success: false,
@@ -470,6 +270,214 @@ export class CloudBackupService {
         subjectsCount: 0,
         classesCount: 0,
         message: e?.message || 'Restore error',
+      };
+    }
+  }
+
+  /**
+   * Applies an exported CloudBackupPayload directly into local SQLite database.
+   * Supports atomic rollback and foreign key remapping.
+   */
+  static async applyRestoredPayload(
+    parsed: CloudBackupPayload,
+    mode: 'merge' | 'replace' = 'replace'
+  ): Promise<{
+    success: boolean;
+    restored: boolean;
+    subjectsCount: number;
+    classesCount: number;
+    message: string;
+  }> {
+    // 1. Validate complete backup payload before modifying database
+    const validation = validateBackupPayload(parsed);
+    if (!validation.isValid) {
+      return {
+        success: false,
+        restored: false,
+        subjectsCount: 0,
+        classesCount: 0,
+        message: `Corrupted backup payload: ${validation.error}`,
+      };
+    }
+
+    // 2. Pre-restore snapshot in case of failure (Atomic Rollback Safety)
+    const rollbackSnapshot = await this.exportUserData();
+
+    try {
+      // If 'replace' mode, clear existing entries
+      if (mode === 'replace') {
+        await executeInTransaction([
+          { sql: 'DELETE FROM todos', params: [] },
+          { sql: 'DELETE FROM overrides', params: [] },
+          { sql: 'DELETE FROM lecture_instances', params: [] },
+          { sql: 'DELETE FROM timetable', params: [] },
+          { sql: 'DELETE FROM subjects', params: [] },
+        ]);
+      }
+
+      // 3. Foreign Key Translation Map (Old subject ID -> New subject ID)
+      const subjectIdMap = new Map<number, number>();
+      const timetableIdMap = new Map<number, number>();
+
+      for (const sub of parsed.subjects) {
+        if (mode === 'merge') {
+          // Check for existing subject with identical name
+          const existRes = await executeSql('SELECT id FROM subjects WHERE name = ?', [sub.name]);
+          const existing = rowsToArray<{ id: number }>(existRes);
+
+          if (existing.length > 0) {
+            subjectIdMap.set(sub.id, existing[0].id);
+            continue;
+          }
+        }
+
+        const insertRes = await executeSql(
+          `INSERT INTO subjects (name, color, target_percent, subject_type, is_frozen, past_attended, past_total, credits)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            sub.name,
+            sub.color || '#7C3AED',
+            sub.target_percent || 75,
+            sub.subject_type || 'theory',
+            sub.is_frozen || 0,
+            sub.past_attended || 0,
+            sub.past_total || 0,
+            sub.credits || 1,
+          ]
+        );
+        subjectIdMap.set(sub.id, insertRes.insertId);
+      }
+
+      // 4. Restore Timetable entries with foreign key translation
+      for (const tt of parsed.timetable || []) {
+        const mappedSubId = subjectIdMap.get(tt.subject_id);
+        if (!mappedSubId) continue;
+
+        const ttCheck = await executeSql(
+          'SELECT id FROM timetable WHERE subject_id = ? AND day_of_week = ? AND start_time = ? AND end_time = ?',
+          [mappedSubId, tt.day_of_week, tt.start_time, tt.end_time]
+        );
+        const existingTT = rowsToArray<{ id: number }>(ttCheck);
+
+        if (existingTT.length > 0) {
+          timetableIdMap.set(tt.id, existingTT[0].id);
+        } else {
+          const insertTT = await executeSql(
+            `INSERT INTO timetable (subject_id, day_of_week, start_time, end_time, room)
+             VALUES (?, ?, ?, ?, ?)`,
+            [mappedSubId, tt.day_of_week, tt.start_time, tt.end_time, tt.room || '']
+          );
+          timetableIdMap.set(tt.id, insertTT.insertId);
+        }
+      }
+
+      // 5. Restore Attendance Instances
+      const instanceQueries: Array<{ sql: string; params: any[] }> = [];
+      for (const inst of parsed.instances || []) {
+        const mappedSubId = subjectIdMap.get(inst.subject_id);
+        if (!mappedSubId) continue;
+
+        const checkInst = await executeSql(
+          'SELECT id FROM lecture_instances WHERE subject_id = ? AND date = ? AND start_time = ?',
+          [mappedSubId, inst.date, inst.start_time]
+        );
+
+        if (rowsToArray(checkInst).length === 0) {
+          instanceQueries.push({
+            sql: `INSERT INTO lecture_instances
+                  (subject_id, date, day_of_week, start_time, end_time, status, marked_at, is_override, room, notes)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            params: [
+              mappedSubId,
+              inst.date,
+              inst.day_of_week,
+              inst.start_time,
+              inst.end_time,
+              inst.status,
+              inst.marked_at,
+              inst.is_override || 0,
+              inst.room || '',
+              inst.notes || '',
+            ],
+          });
+        }
+      }
+      if (instanceQueries.length > 0) {
+        await executeInTransaction(instanceQueries);
+      }
+
+      // 6. Restore Overrides with remapped timetable_id
+      const overrideQueries: Array<{ sql: string; params: any[] }> = [];
+      for (const ovr of parsed.overrides || []) {
+        const mappedTTId = timetableIdMap.get(ovr.timetable_id);
+        if (!mappedTTId) continue;
+
+        overrideQueries.push({
+          sql: `INSERT INTO overrides (timetable_id, date, new_start_time, new_day, reason)
+                VALUES (?, ?, ?, ?, ?)`,
+          params: [mappedTTId, ovr.date, ovr.new_start_time || null, ovr.new_day || null, ovr.reason || ''],
+        });
+      }
+      if (overrideQueries.length > 0) {
+        await executeInTransaction(overrideQueries);
+      }
+
+      // 7. Restore Todos with remapped subject_id
+      const todoQueries: Array<{ sql: string; params: any[] }> = [];
+      for (const todo of parsed.todos || []) {
+        const mappedSubId = todo.subject_id ? subjectIdMap.get(todo.subject_id) || null : null;
+
+        todoQueries.push({
+          sql: `INSERT INTO todos (title, subject_id, due_date, due_time, priority, is_completed, notes, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          params: [
+            todo.title,
+            mappedSubId,
+            todo.due_date,
+            todo.due_time || null,
+            todo.priority || 'medium',
+            todo.is_completed || 0,
+            todo.notes || '',
+            todo.created_at || new Date().toISOString(),
+          ],
+        });
+      }
+      if (todoQueries.length > 0) {
+        await executeInTransaction(todoQueries);
+      }
+
+      // 8. Regenerate current timetable slots
+      await generateTodayInstances();
+
+      return {
+        success: true,
+        restored: true,
+        subjectsCount: parsed.subjects.length,
+        classesCount: parsed.instances.length,
+        message: `Successfully restored ${parsed.subjects.length} subjects & ${parsed.instances.length} attendance records from cloud (${mode} mode)!`,
+      };
+    } catch (innerErr: any) {
+      console.error('Fatal restore error, executing rollback:', innerErr);
+      await executeInTransaction([
+        { sql: 'DELETE FROM todos', params: [] },
+        { sql: 'DELETE FROM overrides', params: [] },
+        { sql: 'DELETE FROM lecture_instances', params: [] },
+        { sql: 'DELETE FROM timetable', params: [] },
+        { sql: 'DELETE FROM subjects', params: [] },
+      ]);
+      for (const s of rollbackSnapshot.subjects) {
+        await executeSql(
+          `INSERT INTO subjects (id, name, color, target_percent, subject_type, is_frozen, past_attended, past_total, credits)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [s.id, s.name, s.color, s.target_percent, s.subject_type, s.is_frozen, s.past_attended, s.past_total, s.credits]
+        );
+      }
+      return {
+        success: false,
+        restored: false,
+        subjectsCount: 0,
+        classesCount: 0,
+        message: `Restoration failed: ${innerErr?.message}. Local database safely rolled back.`,
       };
     }
   }

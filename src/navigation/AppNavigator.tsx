@@ -20,6 +20,7 @@ import ChangelogScreen from '../screens/ChangelogScreen';
 import StudentSearchScreen from '../screens/StudentSearchScreen';
 import PublicProfileScreen from '../screens/PublicProfileScreen';
 import PhoneAuthScreen from '../screens/PhoneAuthScreen';
+import AccountSyncScreen from '../screens/AccountSyncScreen';
 import AnimatedCustomTabBar from '../components/AnimatedCustomTabBar';
 import {RootStackParamList, BottomTabParamList} from '../types';
 
@@ -46,7 +47,6 @@ function MainTabs() {
       }}>
       <Tab.Screen name="Timetable" component={TimetableScreen} />
       <Tab.Screen name="Todos" component={TodoListScreen} options={{title: 'To-Do'}} />
-      <Tab.Screen name="Peers" component={StudentSearchScreen} options={{title: 'Campus'}} />
       <Tab.Screen name="Stats" component={StatsStack} />
       <Tab.Screen name="Calendar" component={CalendarHeatmapScreen} />
       <Tab.Screen name="Settings" component={SettingsScreen} />
@@ -94,8 +94,13 @@ export default function AppNavigator() {
         options={{animation: 'slide_from_right'}}
       />
       <Stack.Screen
+        name="AccountSync"
+        component={AccountSyncScreen}
+        options={{animation: 'slide_from_bottom', presentation: 'modal'}}
+      />
+      <Stack.Screen
         name="PhoneAuth"
-        component={PhoneAuthScreen}
+        component={AccountSyncScreen}
         options={{animation: 'slide_from_bottom', presentation: 'modal'}}
       />
       <Stack.Screen
