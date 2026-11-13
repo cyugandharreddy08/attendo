@@ -9,6 +9,7 @@ export interface AuthSession {
   refresh_token: string;
   expires_at: number; // Unix timestamp ms
   user_id: string;
+  email?: string;
   phone?: string;
 }
 

@@ -17,6 +17,25 @@ export const PUBLIC_PROFILE_SELECT_FIELDS =
   'id,username,full_name,college,academic_year,branch,overall_percent,theory_percent,lab_percent,current_streak,longest_streak,active_days_count,activity_matrix,badges,is_public,updated_at';
 
 /**
+ * Validates and normalizes email addresses
+ */
+export function validateAndNormalizeEmail(input: string): { isValid: boolean; normalized: string; error?: string } {
+  if (!input || typeof input !== 'string') {
+    return { isValid: false, normalized: '', error: 'Email address is required.' };
+  }
+  const normalized = input.trim().toLowerCase();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(normalized)) {
+    return {
+      isValid: false,
+      normalized: '',
+      error: 'Please enter a valid email address (e.g., student@college.edu or name@gmail.com).',
+    };
+  }
+  return { isValid: true, normalized };
+}
+
+/**
  * Validates and normalizes phone number to strict E.164 format (+[country_code][digits])
  */
 export function validateAndNormalizePhone(input: string): { isValid: boolean; normalized: string; error?: string } {
@@ -148,6 +167,147 @@ export class AuthService {
 
     await clearAuthSession();
     await deleteSetting(SETTING_PROFILE_KEY);
+  }
+
+  /**
+   * Request 6-digit verification code sent directly to student email via Supabase Auth
+   */
+  static async sendEmailOtp(rawEmail: string): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    const { isValid, normalized: email, error: validationError } = validateAndNormalizeEmail(rawEmail);
+    if (!isValid) {
+      return { success: false, message: validationError || 'Invalid email format.' };
+    }
+
+    try {
+      const { error, status } = await supabaseRestRequest<any>('auth/v1/otp', {
+        method: 'POST',
+        body: {
+          email,
+          create_user: true,
+        },
+      });
+
+      if (error) {
+        return {
+          success: false,
+          message: error || `Failed to send verification email (HTTP ${status}). Please try again.`,
+        };
+      }
+
+      return {
+        success: true,
+        message: `6-digit verification code sent to ${email}. Please check your inbox and spam folder.`,
+      };
+    } catch (e: any) {
+      return {
+        success: false,
+        message: e?.message || 'Network error while contacting authentication server.',
+      };
+    }
+  }
+
+  /**
+   * Verify email OTP with real Supabase Auth and establish an authenticated session.
+   */
+  static async verifyEmailOtp(
+    rawEmail: string,
+    rawOtpToken: string,
+  ): Promise<{
+    success: boolean;
+    isNewUser: boolean;
+    profile?: StudentProfile;
+    session?: AuthSession;
+    message: string;
+  }> {
+    const { isValid, normalized: email, error: emailErr } = validateAndNormalizeEmail(rawEmail);
+    if (!isValid) {
+      return { success: false, isNewUser: false, message: emailErr || 'Invalid email address.' };
+    }
+
+    const token = rawOtpToken.trim();
+    if (!/^\d{6}$/.test(token)) {
+      return { success: false, isNewUser: false, message: 'Please enter the exact 6-digit numeric verification code.' };
+    }
+
+    try {
+      const { data, error, status } = await supabaseRestRequest<{
+        access_token: string;
+        token_type: string;
+        expires_in: number;
+        refresh_token: string;
+        user: { id: string; email?: string; phone?: string };
+      }>('auth/v1/verify', {
+        method: 'POST',
+        body: {
+          type: 'email',
+          email,
+          token,
+        },
+      });
+
+      if (error || !data || !data.access_token || !data.user?.id) {
+        return {
+          success: false,
+          isNewUser: false,
+          message: error || 'Incorrect or expired verification code. Please check your email and try again.',
+        };
+      }
+
+      // Secure authenticated session persistence
+      const session: AuthSession = {
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        expires_at: Date.now() + (data.expires_in || 3600) * 1000,
+        user_id: data.user.id,
+        email: data.user.email || email,
+        phone: data.user.phone || '',
+      };
+      await saveAuthSession(session);
+
+      // Fetch user profile from Supabase for this authenticated user_id
+      const { data: profiles, error: profileErr } = await supabaseRestRequest<StudentProfile[]>(
+        `profiles?user_id=eq.${encodeURIComponent(session.user_id)}&select=*`,
+        { requiresAuth: true }
+      );
+
+      if (!profileErr && profiles && profiles.length > 0) {
+        const found = profiles[0];
+        await this.saveLocalProfile(found);
+
+        // Auto-restore subjects and timetable data from cloud
+        CloudBackupService.restoreUserDataFromCloud(session.user_id).catch(err => {
+          console.warn('Auto cloud restore on login notice:', err);
+        });
+
+        // Sync local stats to cloud
+        this.syncAttendanceProfile().catch(() => {});
+
+        return {
+          success: true,
+          isNewUser: false,
+          profile: found,
+          session,
+          message: `Welcome back, @${found.username}!`,
+        };
+      }
+
+      // New student registration required
+      return {
+        success: true,
+        isNewUser: true,
+        session,
+        message: 'Email verified! Please set up your student profile.',
+      };
+    } catch (e: any) {
+      return {
+        success: false,
+        isNewUser: false,
+        message: e?.message || 'Verification failed due to a network interruption.',
+      };
+    }
   }
 
   /**
@@ -372,6 +532,7 @@ export class AuthService {
 
     const profileData: StudentProfile = {
       id: session.user_id,
+      email: session.email || '',
       phone: session.phone || '',
       username,
       full_name: fullName,

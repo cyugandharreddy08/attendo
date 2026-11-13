@@ -285,7 +285,7 @@ export default function StudentSearchScreen() {
       ) : (
         <FlatList
           data={students}
-          keyExtractor={item => item.id || item.phone}
+          keyExtractor={(item, index) => item.id || item.username || `student-${index}`}
           renderItem={renderStudentItem}
           contentContainerStyle={styles.listContent}
           refreshControl={

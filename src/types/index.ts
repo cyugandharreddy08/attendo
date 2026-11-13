@@ -108,7 +108,8 @@ export interface AttendanceActivityDay {
 
 export interface StudentProfile {
   id: string;
-  phone: string;
+  email?: string;
+  phone?: string;
   username: string;
   full_name: string;
   college: string;
@@ -139,6 +140,7 @@ export type RootStackParamList = {
   MyBugs: undefined;
   Changelog: undefined;
   PhoneAuth: {onSuccess?: () => void} | undefined;
+  StudentAuth: {onSuccess?: () => void} | undefined;
   StudentSearch: {initialCollege?: string} | undefined;
   PublicProfile: {profile?: StudentProfile; username?: string; profileId?: string};
   CalendarHeatmap: undefined;

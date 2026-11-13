@@ -16,7 +16,7 @@ import {useNavigation, useRoute} from '@react-navigation/native';
 import {Colors} from '../theme/colors';
 import {Spacing} from '../theme/spacing';
 import {Typography} from '../theme/typography';
-import {AuthService, normalizePhoneNumber} from '../services/AuthService';
+import {AuthService, validateAndNormalizeEmail} from '../services/AuthService';
 import {
   searchColleges,
   searchBranches,
@@ -33,30 +33,74 @@ const ACADEMIC_YEARS = [
   'Postgraduate / Other',
 ];
 
+const COMMON_DOMAINS = [
+  '@gmail.com',
+  '@outlook.com',
+  '@ac.in',
+  '@edu.in',
+];
+
 export default function PhoneAuthScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
 
-  // Steps: 'phone' | 'otp' | 'profile'
-  const [step, setStep] = useState<'phone' | 'otp' | 'profile'>('phone');
+  // Steps: 'email' | 'otp' | 'profile'
+  const [step, setStep] = useState<'email' | 'otp' | 'profile'>('email');
   const [loading, setLoading] = useState(false);
 
   // Form states
-  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [college, setCollege] = useState('');
   const [academicYear, setAcademicYear] = useState('2nd Year');
   const [branch, setBranch] = useState('');
-  const [demoHint, setDemoHint] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   // Auto-complete suggestions
   const [collegeSuggestions, setCollegeSuggestions] = useState<CollegeInfo[]>([]);
   const [branchSuggestions, setBranchSuggestions] = useState<BranchInfo[]>([]);
   const [showCollegeSuggestions, setShowCollegeSuggestions] = useState(false);
   const [showBranchSuggestions, setShowBranchSuggestions] = useState(false);
+
+  // Username validation state
+  const [usernameChecking, setUsernameChecking] = useState(false);
+  const [usernameStatus, setUsernameStatus] = useState<{ available?: boolean; message?: string }>({});
+
+  useEffect(() => {
+    // Check if user is already logged in
+    AuthService.getCurrentUser().then(user => {
+      if (user) {
+        if (user.email) setEmail(user.email);
+        setUsername(user.username);
+        setFullName(user.full_name);
+        setCollege(user.college);
+        setAcademicYear(user.academic_year || '2nd Year');
+        setBranch(user.branch || '');
+        setStep('profile');
+      }
+    });
+  }, []);
+
+  // Resend cooldown timer
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown(prev => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
+
+  const handleAppendDomain = (domain: string) => {
+    if (!email.includes('@')) {
+      setEmail(prev => `${prev.trim()}${domain}`);
+    } else {
+      const prefix = email.split('@')[0];
+      setEmail(`${prefix}${domain}`);
+    }
+  };
 
   const handleCollegeTextChange = (text: string) => {
     setCollege(text);
@@ -90,52 +134,39 @@ export default function PhoneAuthScreen() {
     setShowBranchSuggestions(false);
   };
 
-  useEffect(() => {
-    // Check if user is already logged in
-    AuthService.getCurrentUser().then(user => {
-      if (user) {
-        setPhone(user.phone);
-        setUsername(user.username);
-        setFullName(user.full_name);
-        setCollege(user.college);
-        setAcademicYear(user.academic_year || '2nd Year');
-        setBranch(user.branch || '');
-        setStep('profile');
-      }
-    });
-  }, []);
-
   const handleSendOtp = async () => {
-    if (!phone.trim()) {
-      Alert.alert('Phone Required', 'Please enter your mobile phone number.');
+    const { isValid, normalized, error } = validateAndNormalizeEmail(email);
+    if (!isValid) {
+      Alert.alert('Invalid Email', error || 'Please enter a valid student email address.');
       return;
     }
 
     setLoading(true);
-    setDemoHint(null);
     try {
-      const res = await AuthService.sendPhoneOtp(phone);
+      const res = await AuthService.sendEmailOtp(normalized);
       setLoading(false);
       if (res.success) {
+        setEmail(normalized);
+        setResendCooldown(30);
         setStep('otp');
       } else {
-        Alert.alert('Error', res.message);
+        Alert.alert('Unable to Send Code', res.message);
       }
     } catch (e: any) {
       setLoading(false);
-      Alert.alert('Error', e?.message || 'Failed to send OTP');
+      Alert.alert('Error', e?.message || 'Failed to send verification email.');
     }
   };
 
   const handleVerifyOtp = async () => {
     if (!otp.trim()) {
-      Alert.alert('OTP Required', 'Please enter the 6-digit verification code.');
+      Alert.alert('Code Required', 'Please enter the 6-digit security code sent to your email.');
       return;
     }
 
     setLoading(true);
     try {
-      const res = await AuthService.verifyPhoneOtp(phone, otp);
+      const res = await AuthService.verifyEmailOtp(email, otp);
       setLoading(false);
 
       if (res.success) {
@@ -146,15 +177,30 @@ export default function PhoneAuthScreen() {
           }
           navigation.goBack();
         } else {
-          // New user -> fill details
+          // New student registration
           setStep('profile');
         }
       } else {
-        Alert.alert('Invalid OTP', res.message || 'Verification failed. Try again.');
+        Alert.alert('Invalid Code', res.message || 'Verification failed. Please check your email code.');
       }
     } catch (e: any) {
       setLoading(false);
-      Alert.alert('Error', e?.message || 'Verification error');
+      Alert.alert('Error', e?.message || 'Verification error occurred.');
+    }
+  };
+
+  const checkUsernameLive = async (name: string) => {
+    if (name.length < 3) {
+      setUsernameStatus({ available: false, message: 'Minimum 3 characters' });
+      return;
+    }
+    setUsernameChecking(true);
+    const res = await AuthService.checkUsernameAvailable(name);
+    setUsernameChecking(false);
+    if (res.available) {
+      setUsernameStatus({ available: true, message: 'Username is available!' });
+    } else {
+      setUsernameStatus({ available: false, message: res.error || 'Username unavailable' });
     }
   };
 
@@ -186,7 +232,7 @@ export default function PhoneAuthScreen() {
       if (res.success) {
         Alert.alert(
           '🚀 Profile Connected!',
-          `Your student profile @${username} is now live and discoverable by classmates from ${college}!`,
+          `Your student profile @${username} is now verified and connected to your email ${email}!`,
           [
             {
               text: 'View Public Profile',
@@ -195,7 +241,7 @@ export default function PhoneAuthScreen() {
               },
             },
             {
-              text: 'Done',
+              text: 'Launch Attendo',
               onPress: () => {
                 if (route.params?.onSuccess) route.params.onSuccess();
                 navigation.goBack();
@@ -204,11 +250,11 @@ export default function PhoneAuthScreen() {
           ],
         );
       } else {
-        Alert.alert('Setup Failed', res.message || 'Could not save profile.');
+        Alert.alert('Setup Failed', res.message || 'Could not save student profile.');
       }
     } catch (e: any) {
       setLoading(false);
-      Alert.alert('Error', e?.message || 'Could not save profile.');
+      Alert.alert('Error', e?.message || 'Could not save student profile.');
     }
   };
 
@@ -220,41 +266,65 @@ export default function PhoneAuthScreen() {
         style={[styles.container, {paddingTop: insets.top}]}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled">
+        
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Text style={styles.backButtonText}>← Back</Text>
           </TouchableOpacity>
+
+          <View style={styles.badgeRow}>
+            <View style={styles.portalBadge}>
+              <Text style={styles.portalBadgeText}>🎓 STUDENT PORTAL</Text>
+            </View>
+            <View style={styles.supabaseBadge}>
+              <Text style={styles.supabaseBadgeText}>SUPABASE VERIFIED</Text>
+            </View>
+          </View>
+
           <Text style={styles.title}>
-            {step === 'profile' ? 'Student Profile Setup' : 'Connect Your Account'}
+            {step === 'profile' ? 'Setup Student Profile' : 'Student Email Sign-In'}
           </Text>
           <Text style={styles.subtitle}>
             {step === 'profile'
-              ? 'Connect with classmates, showcase your LeetCode-style streak, and get discovered by your institute.'
-              : 'Enter your mobile number to sign in or claim your public college attendance profile.'}
+              ? 'Connect with classmates, showcase your LeetCode-style streak, and sync attendance to cloud.'
+              : 'Sign in with your university mail or personal email. Receive an official 6-digit verification code.'}
           </Text>
         </View>
 
-        {/* STEP 1: Phone Input */}
-        {step === 'phone' && (
+        {/* STEP 1: Email Input */}
+        {step === 'email' && (
           <View style={styles.card}>
-            <Text style={styles.fieldLabel}>Mobile Phone Number</Text>
-            <View style={styles.phoneInputRow}>
-              <View style={styles.countryCodeBox}>
-                <Text style={styles.countryCodeText}>🇮🇳 +91</Text>
-              </View>
+            <Text style={styles.fieldLabel}>Student Email Address</Text>
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputIcon}>✉️</Text>
               <TextInput
-                style={styles.phoneInput}
-                placeholder="9876543210"
+                style={styles.textInput}
+                placeholder="student@college.edu or name@gmail.com"
                 placeholderTextColor={Colors.textMuted}
-                keyboardType="phone-pad"
-                value={phone}
-                onChangeText={setPhone}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={email}
+                onChangeText={setEmail}
                 autoFocus
               />
             </View>
+
+            {/* Quick Domain Suggestion Chips */}
+            <View style={styles.domainChipsRow}>
+              {COMMON_DOMAINS.map(dom => (
+                <TouchableOpacity
+                  key={dom}
+                  style={styles.domainChip}
+                  onPress={() => handleAppendDomain(dom)}>
+                  <Text style={styles.domainChipText}>{dom}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
             <Text style={styles.hintText}>
-              We will send a 6-digit verification code to verify your campus identity.
+              We will email you a 6-digit security code. No passwords required, 100% free and instant.
             </Text>
 
             <TouchableOpacity
@@ -264,23 +334,23 @@ export default function PhoneAuthScreen() {
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <Text style={styles.primaryButtonText}>Send Verification Code →</Text>
+                <Text style={styles.primaryButtonText}>Send Security Code →</Text>
               )}
             </TouchableOpacity>
           </View>
         )}
 
-        {/* STEP 2: OTP Input */}
+        {/* STEP 2: OTP Verification */}
         {step === 'otp' && (
           <View style={styles.card}>
-            <Text style={styles.fieldLabel}>Enter 6-Digit OTP</Text>
+            <Text style={styles.fieldLabel}>Enter 6-Digit Code</Text>
             <Text style={styles.subtext}>
-              Sent to {normalizePhoneNumber(phone)}
+              A 6-digit code was sent to <Text style={{color: Colors.primary, fontWeight: '700'}}>{email}</Text>
             </Text>
 
             <TextInput
               style={styles.otpInput}
-              placeholder="123456"
+              placeholder="000000"
               placeholderTextColor={Colors.textMuted}
               keyboardType="number-pad"
               maxLength={6}
@@ -289,12 +359,6 @@ export default function PhoneAuthScreen() {
               autoFocus
             />
 
-            {demoHint && (
-              <View style={styles.demoNotice}>
-                <Text style={styles.demoNoticeText}>💡 {demoHint}</Text>
-              </View>
-            )}
-
             <TouchableOpacity
               style={[styles.primaryButton, loading && styles.buttonDisabled]}
               onPress={handleVerifyOtp}
@@ -302,23 +366,43 @@ export default function PhoneAuthScreen() {
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <Text style={styles.primaryButtonText}>Verify & Continue →</Text>
+                <Text style={styles.primaryButtonText}>Verify & Proceed →</Text>
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.linkButton}
-              onPress={() => setStep('phone')}>
-              <Text style={styles.linkButtonText}>Change Phone Number</Text>
-            </TouchableOpacity>
+            <View style={styles.otpActionsRow}>
+              <TouchableOpacity
+                onPress={handleSendOtp}
+                disabled={resendCooldown > 0 || loading}
+                style={styles.resendBtn}>
+                <Text style={[styles.resendBtnText, resendCooldown > 0 && {color: Colors.textMuted}]}>
+                  {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend Code'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setStep('email')}
+                style={styles.changeEmailBtn}>
+                <Text style={styles.changeEmailBtnText}>Change Email</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
-        {/* STEP 3: Profile Setup */}
+        {/* STEP 3: Student Profile Setup */}
         {step === 'profile' && (
           <View style={styles.card}>
             {/* Username */}
-            <Text style={styles.fieldLabel}>Username</Text>
+            <View style={styles.labelWithStatus}>
+              <Text style={styles.fieldLabel}>Choose @Username</Text>
+              {usernameChecking ? (
+                <ActivityIndicator size="small" color={Colors.primary} />
+              ) : usernameStatus.message ? (
+                <Text style={[styles.statusMsg, usernameStatus.available ? styles.statusSafe : styles.statusDanger]}>
+                  {usernameStatus.message}
+                </Text>
+              ) : null}
+            </View>
             <View style={styles.usernameRow}>
               <Text style={styles.usernamePrefix}>@</Text>
               <TextInput
@@ -328,7 +412,13 @@ export default function PhoneAuthScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 value={username}
-                onChangeText={t => setUsername(t.replace(/[^a-zA-Z0-9_]/g, ''))}
+                onChangeText={t => {
+                  const cleaned = t.replace(/[^a-zA-Z0-9_]/g, '');
+                  setUsername(cleaned);
+                  if (cleaned.length >= 3) {
+                    checkUsernameLive(cleaned);
+                  }
+                }}
               />
             </View>
 
@@ -381,10 +471,6 @@ export default function PhoneAuthScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-
-            <Text style={styles.hintText}>
-              Students from this institute can find you on the campus peer leaderboard.
-            </Text>
 
             {/* Academic Year */}
             <Text style={styles.fieldLabel}>Academic Year</Text>
@@ -471,7 +557,7 @@ export default function PhoneAuthScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#07090E',
   },
   content: {
     padding: Spacing.screenPad,
@@ -484,128 +570,210 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingVertical: 6,
     paddingHorizontal: 12,
-    backgroundColor: '#1E1E2E',
+    backgroundColor: '#0F172A',
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1E293B',
     marginBottom: Spacing.md,
   },
   backButtonText: {
-    color: Colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
+    color: '#38BDF8',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  portalBadge: {
+    backgroundColor: '#38BDF81A',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#38BDF844',
+  },
+  portalBadgeText: {
+    color: '#38BDF8',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  supabaseBadge: {
+    backgroundColor: '#10B9811A',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#10B98144',
+  },
+  supabaseBadgeText: {
+    color: '#10B981',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
   },
   title: {
     ...Typography.h2,
-    color: Colors.text,
+    color: '#F8FAFC',
     fontWeight: '800',
     marginBottom: 6,
   },
   subtitle: {
     ...Typography.body2,
-    color: Colors.textMuted,
+    color: '#94A3B8',
     lineHeight: 20,
   },
   card: {
-    backgroundColor: Colors.card,
+    backgroundColor: '#0F172A',
     borderRadius: 16,
     padding: Spacing.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#1E293B',
   },
   fieldLabel: {
-    ...Typography.caption,
-    color: Colors.textMuted,
+    fontSize: 11,
+    color: '#94A3B8',
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 6,
     marginTop: 12,
   },
-  phoneInputRow: {
+  labelWithStatus: {
     flexDirection: 'row',
-    gap: 8,
-  },
-  countryCodeBox: {
-    backgroundColor: '#1E1E2E',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  countryCodeText: {
-    color: Colors.text,
-    fontWeight: '700',
-    fontSize: 14,
+  statusMsg: {
+    fontSize: 11,
+    fontWeight: '600',
   },
-  phoneInput: {
-    flex: 1,
-    backgroundColor: '#1E1E2E',
+  statusSafe: {
+    color: '#10B981',
+  },
+  statusDanger: {
+    color: '#EF4444',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#07090E',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#1E293B',
     borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: Colors.text,
+    paddingHorizontal: 12,
+  },
+  inputIcon: {
     fontSize: 16,
+    marginRight: 8,
+  },
+  textInput: {
+    flex: 1,
+    paddingVertical: 12,
+    color: '#F8FAFC',
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  domainChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  },
+  domainChip: {
+    backgroundColor: '#1E293B80',
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  domainChipText: {
+    fontSize: 11,
+    color: '#38BDF8',
     fontWeight: '600',
   },
   otpInput: {
-    backgroundColor: '#1E1E2E',
+    backgroundColor: '#07090E',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#38BDF844',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 14,
-    color: Colors.text,
-    fontSize: 24,
+    color: '#38BDF8',
+    fontSize: 26,
     fontWeight: '800',
     letterSpacing: 10,
     textAlign: 'center',
     marginVertical: 10,
   },
+  otpActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: Spacing.md,
+  },
+  resendBtn: {
+    paddingVertical: 6,
+  },
+  resendBtnText: {
+    color: '#38BDF8',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  changeEmailBtn: {
+    paddingVertical: 6,
+  },
+  changeEmailBtnText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   usernameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1E1E2E',
+    backgroundColor: '#07090E',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#1E293B',
     borderRadius: 12,
     paddingHorizontal: 12,
   },
   usernamePrefix: {
     fontSize: 16,
     fontWeight: '700',
-    color: Colors.primary,
+    color: '#38BDF8',
   },
   usernameInput: {
     flex: 1,
     paddingVertical: 12,
     paddingHorizontal: 6,
-    color: Colors.text,
+    color: '#F8FAFC',
     fontSize: 15,
     fontWeight: '600',
   },
   input: {
-    backgroundColor: '#1E1E2E',
+    backgroundColor: '#07090E',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#1E293B',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    color: Colors.text,
+    color: '#F8FAFC',
     fontSize: 15,
   },
   hintText: {
-    ...Typography.caption,
-    color: Colors.textMuted,
-    marginTop: 6,
     fontSize: 11,
+    color: '#64748B',
+    marginTop: 6,
+    lineHeight: 16,
   },
   subtext: {
-    ...Typography.caption,
-    color: Colors.textMuted,
+    fontSize: 12,
+    color: '#94A3B8',
     marginBottom: 8,
+    lineHeight: 18,
   },
   chipGrid: {
     flexDirection: 'row',
@@ -614,68 +782,52 @@ const styles = StyleSheet.create({
     marginVertical: 6,
   },
   chip: {
-    backgroundColor: '#1E1E2E',
+    backgroundColor: '#07090E',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#1E293B',
   },
   chipActive: {
-    backgroundColor: Colors.primary + '22',
-    borderColor: Colors.primary,
+    backgroundColor: '#38BDF822',
+    borderColor: '#38BDF8',
   },
   chipText: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: '#94A3B8',
     fontWeight: '600',
   },
   chipTextActive: {
-    color: Colors.primary,
+    color: '#38BDF8',
     fontWeight: '700',
   },
   primaryButton: {
-    backgroundColor: Colors.primary,
+    backgroundColor: '#38BDF8',
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: Spacing.lg,
+    shadowColor: '#38BDF8',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   primaryButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: '#07090E',
+    fontWeight: '800',
     fontSize: 15,
-  },
-  linkButton: {
-    alignItems: 'center',
-    marginTop: Spacing.md,
-  },
-  linkButtonText: {
-    color: Colors.primary,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  demoNotice: {
-    backgroundColor: '#F59E0B22',
-    borderWidth: 1,
-    borderColor: '#F59E0B66',
-    borderRadius: 10,
-    padding: 10,
-    marginTop: 8,
-  },
-  demoNoticeText: {
-    color: '#F59E0B',
-    fontSize: 12,
-    fontWeight: '600',
+    letterSpacing: 0.4,
   },
   suggestionBox: {
-    backgroundColor: '#121422',
+    backgroundColor: '#07090E',
     borderWidth: 1,
-    borderColor: '#242A42',
+    borderColor: '#1E293B',
     borderRadius: 12,
     marginTop: 4,
     marginBottom: 8,
@@ -687,13 +839,13 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#1A1E30',
+    borderBottomColor: '#1E293B',
   },
   suggestionBadge: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#00F2FE',
-    backgroundColor: '#00F2FE18',
+    color: '#38BDF8',
+    backgroundColor: '#38BDF818',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
@@ -702,11 +854,11 @@ const styles = StyleSheet.create({
   suggestionName: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#F4F4FF',
+    color: '#F8FAFC',
   },
   suggestionSub: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: '#64748B',
     marginTop: 2,
   },
   quickTagsRow: {
@@ -717,9 +869,9 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   quickTag: {
-    backgroundColor: '#161928',
+    backgroundColor: '#07090E',
     borderWidth: 1,
-    borderColor: '#242A42',
+    borderColor: '#1E293B',
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -727,6 +879,6 @@ const styles = StyleSheet.create({
   quickTagText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#7DD3FC',
+    color: '#38BDF8',
   },
 });

@@ -1,10 +1,37 @@
 import {
+  validateAndNormalizeEmail,
   validateAndNormalizePhone,
   validateAndNormalizeUsername,
   normalizePhoneNumber,
 } from '../src/services/AuthService';
 
 describe('AuthValidation', () => {
+  describe('validateAndNormalizeEmail', () => {
+    it('normalizes valid emails to lowercase and trims whitespace', () => {
+      const res = validateAndNormalizeEmail('  Student.2026@College.Edu.In  ');
+      expect(res.isValid).toBe(true);
+      expect(res.normalized).toBe('student.2026@college.edu.in');
+    });
+
+    it('accepts standard Gmail and corporate/university domains', () => {
+      expect(validateAndNormalizeEmail('test@gmail.com').isValid).toBe(true);
+      expect(validateAndNormalizeEmail('yugandhar@iitb.ac.in').isValid).toBe(true);
+      expect(validateAndNormalizeEmail('user@outlook.com').isValid).toBe(true);
+    });
+
+    it('rejects invalid email formats', () => {
+      expect(validateAndNormalizeEmail('notanemail').isValid).toBe(false);
+      expect(validateAndNormalizeEmail('@domain.com').isValid).toBe(false);
+      expect(validateAndNormalizeEmail('user@').isValid).toBe(false);
+      expect(validateAndNormalizeEmail('user@domain').isValid).toBe(false);
+    });
+
+    it('rejects empty strings or null', () => {
+      expect(validateAndNormalizeEmail('').isValid).toBe(false);
+      expect(validateAndNormalizeEmail(null as any).isValid).toBe(false);
+    });
+  });
+
   describe('validateAndNormalizePhone', () => {
     it('normalizes 10-digit Indian phone numbers with +91 prefix', () => {
       const res = validateAndNormalizePhone('9876543210');
