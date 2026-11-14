@@ -32,7 +32,12 @@ android {
             keyPassword 'android'
         }
         release {
-            if (project.hasProperty('ATTENDO_RELEASE_STORE_FILE')) {
+            if (System.getenv('USE_LEGACY_SIGNING') == "true" || project.hasProperty('useLegacySigning')) {
+                storeFile file('debug.keystore')
+                storePassword 'android'
+                keyAlias 'androiddebugkey'
+                keyPassword 'android'
+            } else if (project.hasProperty('ATTENDO_RELEASE_STORE_FILE')) {
                 storeFile file(ATTENDO_RELEASE_STORE_FILE)
                 storePassword ATTENDO_RELEASE_STORE_PASSWORD
                 keyAlias ATTENDO_RELEASE_KEY_ALIAS
