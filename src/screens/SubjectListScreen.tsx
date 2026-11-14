@@ -10,6 +10,7 @@ import {getAllSubjects, deleteSubject} from '../db/queries/subjects';
 import {getAttendanceStats, getAllSubjectStreaks} from '../db/queries/lectureInstances';
 import {Subject, AttendanceStats} from '../types';
 import SubjectCard from '../components/SubjectCard';
+import AnimatedPressable from '../components/AnimatedPressable';
 
 interface SubjectWithStats {
   subject: Subject;
@@ -64,44 +65,59 @@ export default function SubjectListScreen() {
           <Text style={styles.subtitle}>{subjectsWithStats.length} total subjects</Text>
         </View>
         <View style={styles.headerActions}>
-          <TouchableOpacity
+          <AnimatedPressable
+            physics="bouncy"
+            scaleTo={0.92}
+            translateYOnPress={1.5}
             style={styles.reportsBtn}
             onPress={() => navigation.navigate('Reports')}>
             <Text style={styles.reportsBtnText}>📊 Reports</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          </AnimatedPressable>
+          <AnimatedPressable
+            physics="snappy"
+            scaleTo={0.9}
+            translateYOnPress={2}
             style={styles.addBtn}
             onPress={() => navigation.navigate('AddSubject')}>
             <Text style={styles.addBtnText}>+</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
       </View>
 
-      {/* Filter Segmented Pills */}
+      {/* Filter Segmented Pills with Physics Bounce */}
       <View style={styles.filterRow}>
-        <TouchableOpacity
+        <AnimatedPressable
+          physics="bouncy"
+          scaleTo={0.92}
+          translateYOnPress={1.5}
           style={[styles.filterPill, filter === 'all' && styles.filterPillActive]}
           onPress={() => setFilter('all')}>
           <Text style={[styles.filterPillText, filter === 'all' && styles.filterPillTextActive]}>
             All ({subjectsWithStats.length})
           </Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
 
-        <TouchableOpacity
+        <AnimatedPressable
+          physics="bouncy"
+          scaleTo={0.92}
+          translateYOnPress={1.5}
           style={[styles.filterPill, filter === 'theory' && styles.filterPillActive]}
           onPress={() => setFilter('theory')}>
           <Text style={[styles.filterPillText, filter === 'theory' && styles.filterPillTextActive]}>
             📚 Theory ({subjectsWithStats.filter(s => (s.subject.subject_type || 'theory') === 'theory').length})
           </Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
 
-        <TouchableOpacity
+        <AnimatedPressable
+          physics="bouncy"
+          scaleTo={0.92}
+          translateYOnPress={1.5}
           style={[styles.filterPill, filter === 'lab' && styles.filterPillActive]}
           onPress={() => setFilter('lab')}>
           <Text style={[styles.filterPillText, filter === 'lab' && styles.filterPillTextActive]}>
             🧪 Labs ({subjectsWithStats.filter(s => s.subject.subject_type === 'lab').length})
           </Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
 
       <FlatList

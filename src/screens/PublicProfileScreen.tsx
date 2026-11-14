@@ -254,40 +254,13 @@ export default function PublicProfileScreen() {
 
         {isOwnProfile && (
           <View style={styles.cloudBackupCard}>
-            <Text style={styles.cloudBackupTitle}>☁️ Cloud Attendance Vault</Text>
-            <Text style={styles.cloudBackupSubtitle}>
-              Your subjects, timetable, and attendance history are linked to {profile.phone}.
-            </Text>
-            <View style={styles.cloudActionRow}>
-              <TouchableOpacity
-                style={styles.cloudActionBtn}
-                onPress={async () => {
-                  const res = await AuthService.backupNow();
-                  Alert.alert(res.success ? '🚀 Cloud Backup' : 'Backup Alert', res.message);
-                }}>
-                <Text style={styles.cloudActionBtnText}>⬆️ Backup Now</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.cloudActionBtn, {backgroundColor: '#1E2438', borderColor: '#334155'}]}
-                onPress={async () => {
-                  Alert.alert(
-                    'Restore from Cloud',
-                    'Restore your saved timetable and attendance history from cloud?',
-                    [
-                      {text: 'Cancel', style: 'cancel'},
-                      {
-                        text: 'Restore',
-                        onPress: async () => {
-                          const res = await AuthService.restoreNow();
-                          Alert.alert(res.success ? '✅ Cloud Restored' : 'Restore Alert', res.message);
-                        },
-                      },
-                    ]
-                  );
-                }}>
-                <Text style={[styles.cloudActionBtnText, {color: '#CBD5E1'}]}>⬇️ Restore</Text>
-              </TouchableOpacity>
+            <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 4}}>
+              <View style={{width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981', marginRight: 8}} />
+              <Text style={styles.cloudBackupTitle}>Real-Time Cloud Vault Active</Text>
             </View>
+            <Text style={styles.cloudBackupSubtitle}>
+              Your subjects, timetable, and attendance history continuously sync to your private cloud vault automatically.
+            </Text>
           </View>
         )}
 

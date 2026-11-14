@@ -22,8 +22,39 @@ export type HapticType =
   | 'notificationError'
   | HapticFeedbackTypes;
 
+export type PhysicsProfile = 'bouncy' | 'snappy' | 'gentle' | 'rigid' | 'tactile';
+
+const PHYSICS_CONFIG: Record<
+  PhysicsProfile,
+  {
+    pressIn: {friction: number; tension: number};
+    pressOut: {friction: number; tension: number};
+  }
+> = {
+  bouncy: {
+    pressIn: {friction: 6, tension: 160},
+    pressOut: {friction: 4.2, tension: 120},
+  },
+  snappy: {
+    pressIn: {friction: 8, tension: 280},
+    pressOut: {friction: 5.5, tension: 220},
+  },
+  gentle: {
+    pressIn: {friction: 8, tension: 100},
+    pressOut: {friction: 6, tension: 80},
+  },
+  rigid: {
+    pressIn: {friction: 12, tension: 340},
+    pressOut: {friction: 9, tension: 260},
+  },
+  tactile: {
+    pressIn: {friction: 10, tension: 300},
+    pressOut: {friction: 7, tension: 240},
+  },
+};
+
 interface AnimatedPressableProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   onPress?: () => void;
   onLongPress?: () => void;
   style?: StyleProp<ViewStyle>;
@@ -33,6 +64,8 @@ interface AnimatedPressableProps {
   activeOpacity?: number;
   glowOnPress?: boolean;
   glowColor?: string;
+  physics?: PhysicsProfile;
+  translateYOnPress?: number;
 }
 
 export default function AnimatedPressable({
@@ -43,10 +76,15 @@ export default function AnimatedPressable({
   scaleTo = 0.96,
   hapticType = 'impactLight' as HapticType,
   disabled = false,
-  activeOpacity = 0.88,
+  activeOpacity = 0.92,
+  physics = 'bouncy',
+  translateYOnPress = 1.5,
 }: AnimatedPressableProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const translateYAnim = useRef(new Animated.Value(0)).current;
   const opacityAnim = useRef(new Animated.Value(1)).current;
+
+  const currentPhysics = PHYSICS_CONFIG[physics] || PHYSICS_CONFIG.bouncy;
 
   const handlePressIn = () => {
     if (disabled) return;
@@ -64,13 +102,19 @@ export default function AnimatedPressable({
     Animated.parallel([
       Animated.spring(scaleAnim, {
         toValue: scaleTo,
-        friction: 6,
-        tension: 100,
+        friction: currentPhysics.pressIn.friction,
+        tension: currentPhysics.pressIn.tension,
+        useNativeDriver: true,
+      }),
+      Animated.spring(translateYAnim, {
+        toValue: translateYOnPress,
+        friction: currentPhysics.pressIn.friction,
+        tension: currentPhysics.pressIn.tension,
         useNativeDriver: true,
       }),
       Animated.timing(opacityAnim, {
         toValue: activeOpacity,
-        duration: 100,
+        duration: 90,
         useNativeDriver: true,
       }),
     ]).start();
@@ -81,13 +125,19 @@ export default function AnimatedPressable({
     Animated.parallel([
       Animated.spring(scaleAnim, {
         toValue: 1,
-        friction: 4,
-        tension: 80,
+        friction: currentPhysics.pressOut.friction,
+        tension: currentPhysics.pressOut.tension,
+        useNativeDriver: true,
+      }),
+      Animated.spring(translateYAnim, {
+        toValue: 0,
+        friction: currentPhysics.pressOut.friction,
+        tension: currentPhysics.pressOut.tension,
         useNativeDriver: true,
       }),
       Animated.timing(opacityAnim, {
         toValue: 1,
-        duration: 150,
+        duration: 140,
         useNativeDriver: true,
       }),
     ]).start();
@@ -109,7 +159,10 @@ export default function AnimatedPressable({
         style={[
           style,
           {
-            transform: [{scale: scaleAnim}],
+            transform: [
+              {scale: scaleAnim},
+              {translateY: translateYAnim},
+            ],
             opacity: opacityAnim,
           },
         ]}>

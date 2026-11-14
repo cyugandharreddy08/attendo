@@ -19,6 +19,7 @@ import {initDatabase} from './src/db/database';
 import {generateTodayInstances} from './src/db/queries/lectureInstances';
 import {scheduleEndOfDayNudge, scheduleClassReminders} from './src/services/NotificationService';
 import {ModernOTAService, checkForJSUpdate, checkForNativeUpdate} from './src/services/OTAService';
+import {initAccountSyncEngine} from './src/services/AccountSyncService';
 import ForceUpdateModal from './src/components/ForceUpdateModal';
 import {Colors} from './src/theme/colors';
 
@@ -135,6 +136,7 @@ function App(): React.JSX.Element {
     const boot = async () => {
       try {
         await initDatabase();
+        initAccountSyncEngine();
         await generateTodayInstances();
         await scheduleEndOfDayNudge();
         await scheduleClassReminders(10);

@@ -21,6 +21,7 @@ import {scheduleTaskAlarm} from '../services/NotificationService';
 import {Colors} from '../theme/colors';
 import {Spacing} from '../theme/spacing';
 import {Typography} from '../theme/typography';
+import AnimatedPressable from '../components/AnimatedPressable';
 
 type FilterTab = 'all' | 'pending' | 'completed' | 'high';
 
@@ -167,11 +168,14 @@ export default function TodoListScreen() {
             <Text style={Typography.h2}>To-Do & Tasks</Text>
             <Text style={styles.subtitle}>Assignments, Exams & Reminders</Text>
           </View>
-          <TouchableOpacity
+          <AnimatedPressable
+            physics="snappy"
+            scaleTo={0.92}
+            translateYOnPress={2}
             style={styles.addBtn}
             onPress={() => setModalVisible(true)}>
             <Text style={styles.addBtnText}>+ New Task</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
 
         {/* Progress Card */}
@@ -187,11 +191,14 @@ export default function TodoListScreen() {
           </View>
         </View>
 
-        {/* Filter Chips */}
+        {/* Filter Chips with Physics */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
           {(['all', 'pending', 'completed', 'high'] as FilterTab[]).map(tab => (
-            <TouchableOpacity
+            <AnimatedPressable
               key={tab}
+              physics="bouncy"
+              scaleTo={0.92}
+              translateYOnPress={1.5}
               style={[styles.filterChip, filter === tab && styles.filterChipActive]}
               onPress={() => setFilter(tab)}>
               <Text style={[styles.filterChipText, filter === tab && styles.filterChipTextActive]}>
@@ -200,7 +207,7 @@ export default function TodoListScreen() {
                 {tab === 'completed' && '✅ Done'}
                 {tab === 'high' && '🔥 High Priority'}
               </Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
           ))}
         </ScrollView>
       </View>
@@ -213,13 +220,15 @@ export default function TodoListScreen() {
         renderItem={({item}) => {
           const priorityInfo = getPriorityBadge(item.priority);
           return (
-            <TouchableOpacity
+            <AnimatedPressable
+              physics="bouncy"
+              scaleTo={0.97}
+              translateYOnPress={1.5}
               style={[
                 styles.taskCard,
                 item.is_completed === 1 && styles.taskCardCompleted,
               ]}
-              onPress={() => handleToggle(item)}
-              activeOpacity={0.8}>
+              onPress={() => handleToggle(item)}>
               <TouchableOpacity
                 style={[
                   styles.checkbox,
@@ -260,7 +269,7 @@ export default function TodoListScreen() {
               <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item.id)}>
                 <Text style={styles.deleteBtnText}>🗑️</Text>
               </TouchableOpacity>
-            </TouchableOpacity>
+            </AnimatedPressable>
           );
         }}
         ListEmptyComponent={

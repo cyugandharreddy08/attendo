@@ -352,42 +352,54 @@ export default function TimetableScreen() {
         </TouchableOpacity>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.headerActionsScroll}>
           <AnimatedPressable
+            physics="bouncy"
             scaleTo={0.92}
+            translateYOnPress={1.5}
             hapticType="impactLight"
             style={[styles.viewToggleBtn, viewMode === 'grid' && styles.viewToggleBtnActive]}
             onPress={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}>
             <Text style={styles.viewToggleText}>{viewMode === 'list' ? '🗺️ Grid' : '📱 List'}</Text>
           </AnimatedPressable>
           <AnimatedPressable
+            physics="bouncy"
             scaleTo={0.92}
+            translateYOnPress={1.5}
             hapticType="impactLight"
             style={[styles.holidayBtn, {borderColor: '#F59E0B66', backgroundColor: '#F59E0B15'}]}
             onPress={() => navigation.navigate('PublicProfile', {})}>
             <Text style={[styles.holidayBtnText, {color: '#F59E0B'}]}>🔥 {streakCount}d Streak</Text>
           </AnimatedPressable>
           <AnimatedPressable
+            physics="bouncy"
             scaleTo={0.92}
+            translateYOnPress={1.5}
             hapticType="impactLight"
             style={styles.holidayBtn}
             onPress={() => setBunkModalVisible(true)}>
             <Text style={styles.holidayBtnText}>🔮 Predict</Text>
           </AnimatedPressable>
           <AnimatedPressable
+            physics="bouncy"
             scaleTo={0.92}
+            translateYOnPress={1.5}
             hapticType="impactLight"
             style={styles.holidayBtn}
             onPress={() => setAchievementsModalVisible(true)}>
             <Text style={styles.holidayBtnText}>🏆 Badges</Text>
           </AnimatedPressable>
           <AnimatedPressable
+            physics="bouncy"
             scaleTo={0.92}
+            translateYOnPress={1.5}
             hapticType="impactLight"
             style={styles.holidayBtn}
             onPress={() => openBulkSheetForDate(selectedDate)}>
             <Text style={styles.holidayBtnText}>🌴 Holiday</Text>
           </AnimatedPressable>
           <AnimatedPressable
+            physics="snappy"
             scaleTo={0.92}
+            translateYOnPress={2}
             glowOnPress={true}
             glowColor={Colors.primary}
             hapticType="impactMedium"
@@ -418,7 +430,7 @@ export default function TimetableScreen() {
         onLabPress={() => navigation.navigate('MainTabs' as any, {screen: 'Stats'})}
       />
 
-      {/* Week Day Selector Strip */}
+      {/* Week Day Selector Strip with Physics Bounce */}
       <View style={styles.weekStrip}>
         {weekDates.map((date, i) => {
           const isSelected = format(date, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
@@ -426,7 +438,9 @@ export default function TimetableScreen() {
           return (
             <AnimatedPressable
               key={i}
-              scaleTo={0.92}
+              physics="bouncy"
+              scaleTo={0.88}
+              translateYOnPress={2}
               hapticType="selection"
               style={[
                 styles.dayCell,

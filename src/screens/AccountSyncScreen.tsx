@@ -31,7 +31,6 @@ export default function AccountSyncScreen() {
   const [syncKey, setSyncKey] = useState<string>('LOADING...');
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [inputCode, setInputCode] = useState<string>('');
-  const [syncing, setSyncing] = useState<boolean>(false);
   const [restoring, setRestoring] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
 
@@ -72,24 +71,7 @@ export default function AccountSyncScreen() {
     } catch {}
   };
 
-  const handleBackupNow = async () => {
-    triggerHaptic('impactMedium');
-    setSyncing(true);
-    const result = await AccountSyncService.backupToCloud(syncKey);
-    setSyncing(false);
 
-    if (result.success) {
-      triggerHaptic('notificationSuccess');
-      setLastSync(new Date().toISOString());
-      Alert.alert(
-        'Cloud Vault Updated',
-        `Backed up ${result.subjectsCount || 0} subjects and ${result.classesCount || 0} classes to Security Code ${syncKey}!`,
-      );
-    } else {
-      triggerHaptic('notificationError');
-      Alert.alert('Sync Failed', result.message);
-    }
-  };
 
   const handleRestoreFromCode = async () => {
     const cleaned = normalizeSecurityCode(inputCode);
@@ -176,12 +158,14 @@ export default function AccountSyncScreen() {
           <View style={styles.badgeRow}>
             <View style={styles.statusPill}>
               <View style={styles.statusDot} />
-              <Text style={styles.statusPillText}>Vault Key Active</Text>
+              <Text style={styles.statusPillText}>Real-Time Sync Active</Text>
             </View>
-            <Text style={styles.heroCardHint}>Private to your device</Text>
+            <Text style={styles.heroCardHint}>
+              {lastSync ? formatLastSync(lastSync) : 'Automatic Cloud Storage'}
+            </Text>
           </View>
 
-          <Text style={styles.heroCardLabel}>YOUR UNIQUE SECURITY CODE</Text>
+          <Text style={styles.heroCardLabel}>YOUR ACCOUNT SECURITY CODE</Text>
 
           <View style={styles.codeContainer}>
             <Text style={styles.codeText} selectable>
@@ -211,37 +195,10 @@ export default function AccountSyncScreen() {
           </View>
 
           <Text style={styles.heroNote}>
-            🔒 This code is your master key. Whenever you change phones or reinstall Attendo, enter
-            this code to restore all your subjects, timetable, and attendance history in seconds.
+            🔒 Every time you update attendance, add a subject, or change a class, your changes are
+            automatically saved in your private cloud vault. Whenever you get a new phone or reinstall,
+            enter this code to instantly restore your data.
           </Text>
-        </View>
-
-        {/* CLOUD BACKUP SYNC CARD */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.iconCircle}>
-              <Text style={{fontSize: 20}}>☁️</Text>
-            </View>
-            <View style={{flex: 1, marginLeft: 12}}>
-              <Text style={styles.sectionTitle}>Cloud Vault Backup</Text>
-              <Text style={styles.sectionSubtitle}>{formatLastSync(lastSync)}</Text>
-            </View>
-          </View>
-
-          <AnimatedPressable
-            style={styles.syncNowBtn}
-            onPress={handleBackupNow}
-            disabled={syncing}
-            hapticType="impactMedium">
-            {syncing ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <>
-                <Text style={styles.syncNowIcon}>⚡</Text>
-                <Text style={styles.syncNowBtnText}>Backup Everything Now</Text>
-              </>
-            )}
-          </AnimatedPressable>
         </View>
 
         {/* RESTORE ANOTHER DEVICE CARD */}

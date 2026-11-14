@@ -74,7 +74,9 @@ export default function TimetableSplitStatsCard({
     <View style={styles.container}>
       {/* Top HUD status bar */}
       <AnimatedPressable
+        physics="bouncy"
         scaleTo={0.97}
+        translateYOnPress={1.5}
         glowOnPress={true}
         glowColor={overallColor}
         style={styles.topHudBar}
@@ -100,7 +102,9 @@ export default function TimetableSplitStatsCard({
       <View style={styles.cardsRow}>
         {/* Theory Card */}
         <AnimatedPressable
-          scaleTo={0.96}
+          physics="bouncy"
+          scaleTo={0.95}
+          translateYOnPress={2}
           glowOnPress={true}
           glowColor={theoryColor}
           style={[
@@ -154,7 +158,9 @@ export default function TimetableSplitStatsCard({
 
         {/* Lab Card */}
         <AnimatedPressable
-          scaleTo={0.96}
+          physics="bouncy"
+          scaleTo={0.95}
+          translateYOnPress={2}
           glowOnPress={true}
           glowColor={labColor}
           style={[

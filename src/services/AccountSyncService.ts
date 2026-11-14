@@ -1,10 +1,51 @@
-import { executeSql, rowsToArray } from '../db/database';
+import { executeSql, rowsToArray, setDatabaseChangeListener } from '../db/database';
 import { getSetting, setSetting } from '../db/queries/settings';
 import { CloudBackupService } from './CloudBackupService';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config/supabase';
 
 const SETTING_ACCOUNT_SYNC_KEY = 'account_sync_key';
 const SETTING_LAST_SYNC_TIME = 'account_last_sync_timestamp';
+
+let autoSyncTimer: any = null;
+let isAutoSyncing = false;
+let pendingAutoSync = false;
+
+/**
+ * Triggers background auto-sync debounced by delayMs.
+ * Runs silently whenever any subject, timetable, attendance, or to-do update occurs.
+ */
+export function triggerAutoCloudSync(delayMs: number = 1800): void {
+  if (autoSyncTimer) {
+    clearTimeout(autoSyncTimer);
+  }
+  autoSyncTimer = setTimeout(async () => {
+    if (isAutoSyncing) {
+      pendingAutoSync = true;
+      return;
+    }
+    isAutoSyncing = true;
+    try {
+      await AccountSyncService.backupToCloud();
+    } catch (e) {
+      console.warn('[AutoSync] Silent auto-sync notice:', e);
+    } finally {
+      isAutoSyncing = false;
+      if (pendingAutoSync) {
+        pendingAutoSync = false;
+        triggerAutoCloudSync(1000);
+      }
+    }
+  }, delayMs);
+}
+
+/**
+ * Connects SQLite database change listener to continuous cloud vault sync.
+ */
+export function initAccountSyncEngine(): void {
+  setDatabaseChangeListener(() => {
+    triggerAutoCloudSync(1800);
+  });
+}
 
 /**
  * Generates an intuitive, high-entropy 12-character code: ATND-XXXX-XXXX

@@ -28,6 +28,7 @@ import {getAllSubjects} from '../db/queries/subjects';
 import {LectureInstance, Subject, AttendanceStatus, AttendanceActivityDay} from '../types';
 import {Colors, getStatusColor} from '../theme/colors';
 import LeetCodeAttendanceHeatmap from '../components/LeetCodeAttendanceHeatmap';
+import AnimatedPressable from '../components/AnimatedPressable';
 
 const STATUS_ICONS: Record<string, string> = {
   present: '✓',
@@ -296,11 +297,13 @@ export default function CalendarHeatmapScreen() {
                 const hasClasses = dayClasses.length > 0;
 
                 return (
-                  <TouchableOpacity
+                  <AnimatedPressable
                     key={dateStr}
-                    activeOpacity={0.7}
+                    physics="bouncy"
+                    scaleTo={0.88}
+                    translateYOnPress={1.5}
+                    hapticType="impactLight"
                     onPress={() => {
-                      ReactNativeHapticFeedback.trigger('impactLight');
                       setSelectedDate(dateStr);
                     }}
                     style={[
@@ -325,7 +328,7 @@ export default function CalendarHeatmapScreen() {
                     ) : (
                       <View style={styles.emptyDot} />
                     )}
-                  </TouchableOpacity>
+                  </AnimatedPressable>
                 );
               })}
             </View>
@@ -358,19 +361,25 @@ export default function CalendarHeatmapScreen() {
                   </Text>
                 </View>
 
-                {/* Bulk Actions for Selected Day */}
+                {/* Bulk Actions for Selected Day with Spring Physics */}
                 {selectedDayInstances.length > 0 && (
                   <View style={styles.bulkActionRow}>
-                    <TouchableOpacity
+                    <AnimatedPressable
+                      physics="snappy"
+                      scaleTo={0.92}
+                      translateYOnPress={1.5}
                       style={styles.bulkBtnPresent}
                       onPress={() => handleMarkAllDay('present')}>
                       <Text style={styles.bulkBtnText}>All ✓</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
+                    </AnimatedPressable>
+                    <AnimatedPressable
+                      physics="snappy"
+                      scaleTo={0.92}
+                      translateYOnPress={1.5}
                       style={styles.bulkBtnHoliday}
                       onPress={() => handleMarkAllDay('holiday')}>
                       <Text style={styles.bulkBtnText}>Holiday 🏖️</Text>
-                    </TouchableOpacity>
+                    </AnimatedPressable>
                   </View>
                 )}
               </View>
@@ -407,14 +416,17 @@ export default function CalendarHeatmapScreen() {
                           ⏱️ {cls.start_time} – {cls.end_time} {cls.room ? `• 📍 ${cls.room}` : ''}
                         </Text>
 
-                        {/* Interactive 1-Tap Attendance Buttons */}
+                        {/* Interactive 1-Tap Attendance Buttons with Physics */}
                         <View style={styles.statusButtonsRow}>
                           {(['present', 'absent', 'holiday', 'cancelled'] as AttendanceStatus[]).map(statusKey => {
                             const isSelected = cls.status === statusKey;
                             const statusColor = getStatusColor(statusKey);
                             return (
-                              <TouchableOpacity
+                              <AnimatedPressable
                                 key={statusKey}
+                                physics="bouncy"
+                                scaleTo={0.92}
+                                translateYOnPress={1.5}
                                 style={[
                                   styles.quickStatusBtn,
                                   isSelected && {backgroundColor: statusColor, borderColor: statusColor},
@@ -426,7 +438,7 @@ export default function CalendarHeatmapScreen() {
                                 ]}>
                                   {STATUS_ICONS[statusKey]} {statusKey.charAt(0).toUpperCase() + statusKey.slice(1)}
                                 </Text>
-                              </TouchableOpacity>
+                              </AnimatedPressable>
                             );
                           })}
                         </View>

@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
-  ActivityIndicator,
   Platform,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
@@ -20,8 +19,7 @@ import {clearEntireTimetable, clearAllData} from '../db/queries/timetable';
 import {scheduleClassReminders} from '../services/NotificationService';
 
 import Clipboard from '@react-native-clipboard/clipboard';
-import {Linking, Modal, TextInput} from 'react-native';
-import {exportDataToJSON, importDataFromJSON} from '../db/queries/backup';
+import {Linking} from 'react-native';
 
 import {useNavigation, useIsFocused} from '@react-navigation/native';
 import {AuthService} from '../services/AuthService';
@@ -47,13 +45,10 @@ export default function SettingsScreen() {
 
   const [syncKey, setSyncKey] = useState<string>('...');
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
-  const [syncingCloud, setSyncingCloud] = useState<boolean>(false);
   const [keyCopied, setKeyCopied] = useState<boolean>(false);
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [reminderLead, setReminderLead] = useState(10);
-  const [importModalVisible, setImportModalVisible] = useState(false);
-  const [importJsonText, setImportJsonText] = useState('');
 
   const loadAccountSyncInfo = useCallback(async () => {
     const key = await AccountSyncService.getOrGenerateSyncKey();
@@ -78,18 +73,6 @@ export default function SettingsScreen() {
     Clipboard.setString(syncKey);
     setKeyCopied(true);
     setTimeout(() => setKeyCopied(false), 2000);
-  };
-
-  const handleQuickCloudSync = async () => {
-    setSyncingCloud(true);
-    const result = await AccountSyncService.backupToCloud(syncKey);
-    setSyncingCloud(false);
-    if (result.success) {
-      setLastSyncTime(new Date().toISOString());
-      Alert.alert('Cloud Backup Complete', result.message);
-    } else {
-      Alert.alert('Sync Failed', result.message);
-    }
   };
 
   const handleSyncProfile = async () => {
@@ -123,37 +106,7 @@ export default function SettingsScreen() {
     );
   };
 
-  const handleExportBackup = async () => {
-    try {
-      const json = await exportDataToJSON();
-      Clipboard.setString(json);
-      Alert.alert(
-        '💾 Backup Exported!',
-        'Your full timetable, subjects & attendance history JSON has been copied to your clipboard! Save it anywhere for safety.',
-      );
-    } catch (e) {
-      Alert.alert('Export Failed', String(e));
-    }
-  };
 
-  const handleImportBackup = () => {
-    setImportModalVisible(true);
-  };
-
-  const handleConfirmImport = async () => {
-    if (!importJsonText.trim()) {
-      Alert.alert('Input Required', 'Please paste your backup JSON code.');
-      return;
-    }
-    try {
-      await importDataFromJSON(importJsonText.trim());
-      setImportModalVisible(false);
-      setImportJsonText('');
-      Alert.alert('🎉 Restore Complete!', 'All old subjects, timetable & attendance history have been restored successfully!');
-    } catch (e) {
-      Alert.alert('Restore Failed', 'Invalid backup JSON string. Please check the code and try again.');
-    }
-  };
 
   const handleGoogleCalendarSync = () => {
     const url = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=Attendo+Class+Schedule&details=Exported+from+Attendo+App';
@@ -216,14 +169,14 @@ export default function SettingsScreen() {
       contentContainerStyle={styles.content}>
       <Text style={styles.pageTitle}>Settings</Text>
 
-      {/* Account Security Code & Instant Cloud Sync Card */}
+      {/* Account Security Code & Real-Time Cloud Sync Card */}
       <View style={styles.vaultCard}>
         <View style={styles.vaultCardHeader}>
           <View style={styles.vaultBadge}>
             <View style={styles.vaultBadgeDot} />
-            <Text style={styles.vaultBadgeText}>Cloud Vault Active</Text>
+            <Text style={styles.vaultBadgeText}>Real-Time Cloud Sync Active</Text>
           </View>
-          <Text style={styles.vaultHint}>No Password • 1-Tap Sync</Text>
+          <Text style={styles.vaultHint}>Continuous • No Backups Needed</Text>
         </View>
 
         <Text style={styles.vaultLabel}>YOUR ACCOUNT SECURITY CODE</Text>
@@ -242,30 +195,25 @@ export default function SettingsScreen() {
 
         <Text style={styles.vaultSubtext}>
           {lastSyncTime
-            ? `🟢 Last backed up: ${new Date(lastSyncTime).toLocaleDateString()} at ${new Date(
+            ? `🟢 Cloud vault synchronized at ${new Date(
                 lastSyncTime,
-              ).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`
-            : '⚪ Backup your data to preserve attendance across reinstalls'}
+              ).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}. All attendance & timetable edits save automatically.`
+            : '🟢 Real-time sync engine is running. Every subject, class mark, and edit updates in the cloud automatically.'}
         </Text>
 
         <View style={styles.vaultActionsRow}>
           <AnimatedPressable
             style={styles.vaultSyncBtn}
-            onPress={handleQuickCloudSync}
-            disabled={syncingCloud}
-            hapticType="impactMedium">
-            {syncingCloud ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <Text style={styles.vaultSyncBtnText}>⚡ Backup Now</Text>
-            )}
+            onPress={handleCopySecurityCode}
+            hapticType="impactLight">
+            <Text style={styles.vaultSyncBtnText}>{keyCopied ? '✓ Code Copied' : '📋 Copy Security Code'}</Text>
           </AnimatedPressable>
 
           <AnimatedPressable
             style={styles.vaultManageBtn}
             onPress={() => navigation.navigate('AccountSync')}
             hapticType="impactLight">
-            <Text style={styles.vaultManageBtnText}>Restore / Link Phone →</Text>
+            <Text style={styles.vaultManageBtnText}>📱 Link / Switch Phone →</Text>
           </AnimatedPressable>
         </View>
       </View>
@@ -338,31 +286,6 @@ export default function SettingsScreen() {
         />
       </SettingsSection>
 
-      <SettingsSection title="Backup & Restore (JSON)">
-        <SettingsRow
-          label="Export Full Backup (JSON)"
-          description="Copy subjects, timetable & attendance data to clipboard"
-          right={
-            <TouchableOpacity
-              style={[styles.actionBtn, {backgroundColor: Colors.primary}]}
-              onPress={handleExportBackup}>
-              <Text style={styles.actionBtnText}>💾 Export</Text>
-            </TouchableOpacity>
-          }
-        />
-        <SettingsRow
-          label="Import / Restore Backup"
-          description="Paste JSON code to restore data + timetable instantly"
-          right={
-            <TouchableOpacity
-              style={[styles.actionBtn, {backgroundColor: Colors.shifted}]}
-              onPress={handleImportBackup}>
-              <Text style={styles.actionBtnText}>📥 Restore</Text>
-            </TouchableOpacity>
-          }
-        />
-      </SettingsSection>
-
       <SettingsSection title="Calendar Integration">
         <SettingsRow
           label="Sync with Google Calendar"
@@ -426,40 +349,10 @@ export default function SettingsScreen() {
       </SettingsSection>
 
       <SettingsSection title="About">
-        <SettingsRow label="App Version" description="7.1.0 (Attendo Cloud OTA Active)" />
+        <SettingsRow label="App Version" description="8.0.2 (Real-time Cloud Sync Active)" />
         <SettingsRow label="Cloud Backend" description="Supabase + Gemini 2.0 Flash AI" />
-        <SettingsRow label="DB Engine" description="SQLite 3 + Postgres Cloud Sync" />
+        <SettingsRow label="DB Engine" description="SQLite 3 + Continuous Postgres Sync" />
       </SettingsSection>
-
-      <Modal visible={importModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>📥 Restore Backup (JSON)</Text>
-            <Text style={styles.modalSubtitle}>Paste your exported Attendo JSON backup code below:</Text>
-            <TextInput
-              style={styles.modalInput}
-              multiline
-              numberOfLines={8}
-              value={importJsonText}
-              onChangeText={setImportJsonText}
-              placeholder="Paste JSON backup code here..."
-              placeholderTextColor={Colors.textMuted}
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalBtn, {backgroundColor: Colors.surface}]}
-                onPress={() => setImportModalVisible(false)}>
-                <Text style={{color: Colors.textSecondary, fontWeight: '600'}}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalBtn, {backgroundColor: Colors.primary}]}
-                onPress={handleConfirmImport}>
-                <Text style={{color: '#FFF', fontWeight: '700'}}>Restore Now</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   );
 }
@@ -546,50 +439,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 13,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    justifyContent: 'center',
-    padding: Spacing.screenPad,
-  },
-  modalContent: {
-    backgroundColor: Colors.card,
-    borderRadius: Spacing.cardRadiusLg,
-    padding: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  modalTitle: {
-    ...Typography.h2,
-    marginBottom: Spacing.xs,
-  },
-  modalSubtitle: {
-    ...Typography.body2,
-    marginBottom: Spacing.md,
-  },
-  modalInput: {
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-    borderWidth: 1,
-    borderRadius: Spacing.cardRadius,
-    padding: Spacing.md,
-    color: Colors.textPrimary,
-    fontFamily: 'monospace',
-    fontSize: 12,
-    textAlignVertical: 'top',
-    height: 160,
-    marginBottom: Spacing.md,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: Spacing.sm,
-  },
-  modalBtn: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm + 2,
-    borderRadius: Spacing.cardRadius,
   },
   vaultCard: {
     backgroundColor: '#0F172A',

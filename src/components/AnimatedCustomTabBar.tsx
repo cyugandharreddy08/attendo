@@ -6,12 +6,10 @@ import {
   StyleSheet,
   Animated,
   Dimensions,
-  Platform,
 } from 'react-native';
 import {BottomTabBarProps} from '@react-navigation/bottom-tabs';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
-import {Colors} from '../theme/colors';
 
 const TAB_ICONS: Record<string, {active: string; inactive: string; label: string}> = {
   Timetable: {active: '📅', inactive: '📅', label: 'Schedule'},
@@ -22,9 +20,99 @@ const TAB_ICONS: Record<string, {active: string; inactive: string; label: string
   Settings: {active: '⚙️', inactive: '⚙️', label: 'Settings'},
 };
 
+interface TabItemProps {
+  route: any;
+  index: number;
+  isFocused: boolean;
+  tabWidth: number;
+  navigation: any;
+}
+
+function TabItem({route, isFocused, tabWidth, navigation}: TabItemProps) {
+  const config = TAB_ICONS[route.name] || {
+    active: '📌',
+    inactive: '📌',
+    label: route.name,
+  };
+
+  const scaleAnim = useRef(new Animated.Value(isFocused ? 1.15 : 1)).current;
+  const liftAnim = useRef(new Animated.Value(isFocused ? -2 : 0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: isFocused ? 1.18 : 1,
+        friction: 5,
+        tension: 130,
+        useNativeDriver: true,
+      }),
+      Animated.spring(liftAnim, {
+        toValue: isFocused ? -2.5 : 0,
+        friction: 6,
+        tension: 130,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [isFocused, scaleAnim, liftAnim]);
+
+  const onPress = () => {
+    try {
+      ReactNativeHapticFeedback.trigger('selection', {
+        enableVibrateFallback: true,
+        ignoreAndroidSystemSettings: false,
+      });
+    } catch {}
+
+    const event = navigation.emit({
+      type: 'tabPress',
+      target: route.key,
+      canPreventDefault: true,
+    });
+
+    if (!isFocused && !event.defaultPrevented) {
+      navigation.navigate(route.name);
+    }
+  };
+
+  return (
+    <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityState={isFocused ? {selected: true} : {}}
+      onPress={onPress}
+      activeOpacity={0.75}
+      style={[styles.tabButton, {width: tabWidth}]}>
+      <Animated.View
+        style={[
+          styles.iconWrap,
+          {
+            transform: [
+              {scale: scaleAnim},
+              {translateY: liftAnim},
+            ],
+          },
+        ]}>
+        <Text style={[styles.tabEmoji, isFocused && styles.tabEmojiFocused]}>
+          {config.active}
+        </Text>
+      </Animated.View>
+
+      <Text
+        style={[
+          styles.tabLabel,
+          isFocused ? styles.tabLabelFocused : styles.tabLabelInactive,
+        ]}
+        numberOfLines={1}>
+        {config.label}
+      </Text>
+
+      {isFocused && <View style={styles.glowDot} />}
+    </TouchableOpacity>
+  );
+}
+
 export default function AnimatedCustomTabBar({
   state,
-  descriptors,
+  descriptors: _descriptors,
   navigation,
 }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
@@ -36,8 +124,8 @@ export default function AnimatedCustomTabBar({
   useEffect(() => {
     Animated.spring(translateX, {
       toValue: state.index * tabWidth,
-      friction: 6,
-      tension: 90,
+      friction: 5.5,
+      tension: 110,
       useNativeDriver: true,
     }).start();
   }, [state.index, tabWidth, translateX]);
@@ -57,77 +145,16 @@ export default function AnimatedCustomTabBar({
         />
 
         {/* Tab Buttons */}
-        {state.routes.map((route, index) => {
-          const isFocused = state.index === index;
-          const config = TAB_ICONS[route.name] || {
-            active: '📌',
-            inactive: '📌',
-            label: route.name,
-          };
-
-          const scaleAnim = useRef(new Animated.Value(isFocused ? 1.15 : 1)).current;
-
-          useEffect(() => {
-            Animated.spring(scaleAnim, {
-              toValue: isFocused ? 1.15 : 1,
-              friction: 5,
-              tension: 100,
-              useNativeDriver: true,
-            }).start();
-          }, [isFocused, scaleAnim]);
-
-          const onPress = () => {
-            try {
-              ReactNativeHapticFeedback.trigger('impactLight', {
-                enableVibrateFallback: true,
-                ignoreAndroidSystemSettings: false,
-              });
-            } catch {}
-
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: route.key,
-              canPreventDefault: true,
-            });
-
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
-            }
-          };
-
-          return (
-            <TouchableOpacity
-              key={route.key}
-              accessibilityRole="button"
-              accessibilityState={isFocused ? {selected: true} : {}}
-              onPress={onPress}
-              activeOpacity={0.75}
-              style={[styles.tabButton, {width: tabWidth}]}>
-              <Animated.View
-                style={[
-                  styles.iconWrap,
-                  {
-                    transform: [{scale: scaleAnim}],
-                  },
-                ]}>
-                <Text style={[styles.tabEmoji, isFocused && styles.tabEmojiFocused]}>
-                  {config.active}
-                </Text>
-              </Animated.View>
-
-              <Text
-                style={[
-                  styles.tabLabel,
-                  isFocused ? styles.tabLabelFocused : styles.tabLabelInactive,
-                ]}
-                numberOfLines={1}>
-                {config.label}
-              </Text>
-
-              {isFocused && <View style={styles.glowDot} />}
-            </TouchableOpacity>
-          );
-        })}
+        {state.routes.map((route, index) => (
+          <TabItem
+            key={route.key}
+            route={route}
+            index={index}
+            isFocused={state.index === index}
+            tabWidth={tabWidth}
+            navigation={navigation}
+          />
+        ))}
       </View>
     </View>
   );

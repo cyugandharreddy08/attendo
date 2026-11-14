@@ -56,6 +56,22 @@ export async function initDatabase(): Promise<void> {
   }
 }
 
+export type DatabaseChangeListener = () => void;
+let dbChangeListener: DatabaseChangeListener | null = null;
+
+export function setDatabaseChangeListener(listener: DatabaseChangeListener | null) {
+  dbChangeListener = listener;
+}
+
+function checkAndNotifyMutation(sql: string) {
+  if (!dbChangeListener) return;
+  const isMutation = /^\s*(INSERT|UPDATE|DELETE)\s+/i.test(sql);
+  const isExcluded = /\b(settings|schema_migrations|sqlite_sequence)\b/i.test(sql);
+  if (isMutation && !isExcluded) {
+    dbChangeListener();
+  }
+}
+
 export async function executeSql(
   sql: string,
   params: any[] = [],
@@ -63,6 +79,7 @@ export async function executeSql(
   try {
     const database = await getDatabase();
     const [result] = await database.executeSql(sql, params);
+    checkAndNotifyMutation(sql);
     return result;
   } catch (err) {
     // Sanitized logging without leaking sensitive schedule parameters
@@ -81,6 +98,9 @@ export async function executeInTransaction(
       tx.executeSql(sql, params);
     });
   });
+  if (queries.some(q => /^\s*(INSERT|UPDATE|DELETE)\s+/i.test(q.sql))) {
+    checkAndNotifyMutation('UPDATE');
+  }
 }
 
 export function rowsToArray<T>(result: ResultSet): T[] {

@@ -91,7 +91,9 @@ export default function LectureCard({lecture, onPress, onLongPress}: Props) {
     <AnimatedPressable
       onPress={handlePress}
       onLongPress={handleLongPress}
-      scaleTo={0.97}
+      physics="bouncy"
+      scaleTo={0.96}
+      translateYOnPress={2}
       glowOnPress={true}
       glowColor={subjectColor}
       style={[

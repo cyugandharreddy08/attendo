@@ -20,7 +20,9 @@ export default function SubjectCard({subject, stats, streak = 0, onPress}: Subje
 
   return (
     <AnimatedPressable
-      scaleTo={0.97}
+      physics="bouncy"
+      scaleTo={0.96}
+      translateYOnPress={2}
       glowOnPress={true}
       glowColor={color}
       style={[

@@ -11,6 +11,7 @@ import {Colors} from '../theme/colors';
 import {Spacing} from '../theme/spacing';
 import {Typography} from '../theme/typography';
 import {AttendanceActivityDay} from '../types';
+import AnimatedPressable from './AnimatedPressable';
 import {
   subWeeks,
   addDays,
@@ -191,15 +192,14 @@ export default function LeetCodeAttendanceHeatmap({
                 const isSelected = selectedDay?.date === day.dateStr;
 
                 return (
-                  <TouchableOpacity
+                  <AnimatedPressable
                     key={dIdx}
-                    activeOpacity={0.7}
+                    physics="bouncy"
+                    scaleTo={0.78}
+                    translateYOnPress={1}
+                    hapticType="impactLight"
                     onPress={() => {
                       if (!day.isFuture) {
-                        ReactNativeHapticFeedback.trigger('impactLight', {
-                          enableVibrateFallback: true,
-                          ignoreAndroidSystemSettings: false,
-                        });
                         setSelectedDay({
                           date: day.dateStr,
                           count: day.count,
