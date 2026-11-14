@@ -1,6 +1,7 @@
 import { executeSql, rowsToArray, executeInTransaction } from '../db/database';
 import { supabaseRestRequest } from './SupabaseClient';
 import { generateTodayInstances } from '../db/queries/lectureInstances';
+import { APP_VERSION } from '../config/supabase';
 
 export const BACKUP_SCHEMA_VERSION = 2;
 export const MAX_BACKUP_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -150,7 +151,7 @@ export class CloudBackupService {
 
     return {
       schema_version: BACKUP_SCHEMA_VERSION,
-      app_version: '8.0.2',
+      app_version: APP_VERSION,
       exported_at: new Date().toISOString(),
       checksum,
       subjects,

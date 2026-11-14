@@ -349,7 +349,7 @@ export default function SettingsScreen() {
       </SettingsSection>
 
       <SettingsSection title="About">
-        <SettingsRow label="App Version" description="8.0.2 (Real-time Cloud Sync Active)" />
+        <SettingsRow label="App Version" description="8.0.3 (Real-Time Physics & Cloud Sync Active)" />
         <SettingsRow label="Cloud Backend" description="Supabase + Gemini 2.0 Flash AI" />
         <SettingsRow label="DB Engine" description="SQLite 3 + Continuous Postgres Sync" />
       </SettingsSection>

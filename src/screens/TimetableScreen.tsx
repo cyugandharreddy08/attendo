@@ -347,7 +347,7 @@ export default function TimetableScreen() {
     <View style={styles.header}>
       <View style={styles.headerTop}>
         <TouchableOpacity onPress={() => openBulkSheetForDate(selectedDate)}>
-          <Text style={styles.brandTitle}>ATTENDO <Text style={styles.v3Badge}>v8.0</Text></Text>
+          <Text style={styles.brandTitle}>ATTENDO <Text style={styles.v3Badge}>v8.0.3</Text></Text>
           <Text style={styles.monthLabel}>{format(selectedDate, 'EEEE, MMMM d, yyyy')} ⚙️</Text>
         </TouchableOpacity>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.headerActionsScroll}>
