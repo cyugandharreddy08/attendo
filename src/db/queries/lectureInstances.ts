@@ -74,6 +74,29 @@ export async function cleanupDuplicateInstances(): Promise<void> {
       const placeholders = victimIds.map(() => '?').join(',');
       await executeSql(`DELETE FROM lecture_instances WHERE id IN (${placeholders})`, victimIds);
     }
+
+    // 3. Clean up orphaned shift overrides where source was unshifted or cancelled
+    const orphanOverrides = await executeSql(`
+      SELECT id, subject_id, date, notes
+      FROM lecture_instances
+      WHERE is_override = 1 AND notes LIKE '%Shifted from %'
+    `);
+    const overrideRows = rowsToArray<{id: number; subject_id: number; date: string; notes: string}>(orphanOverrides);
+    for (const ov of overrideRows) {
+      const match = ov.notes.match(/Shifted from (\d{4}-\d{2}-\d{2})/);
+      if (match) {
+        const srcDate = match[1];
+        const srcCheck = await executeSql(
+          "SELECT COUNT(*) as count FROM lecture_instances WHERE subject_id = ? AND date = ? AND status = 'shifted'",
+          [ov.subject_id, srcDate],
+        );
+        const count = rowsToArray<{count: number}>(srcCheck)[0]?.count ?? 0;
+        if (count === 0) {
+          // Source class was unshifted or reset! Clean this orphan copy up.
+          await executeSql('DELETE FROM lecture_instances WHERE id = ?', [ov.id]);
+        }
+      }
+    }
   } catch (e) {
     console.error('Error cleaning duplicate instances:', e);
   }
@@ -339,11 +362,27 @@ export async function updateInstanceStatus(
       }
     }
 
-    const notesText = reason ? reason : '';
-    await executeSql(
-      'UPDATE lecture_instances SET status = ?, notes = ?, marked_at = ? WHERE id = ?',
-      [newStatus, notesText, now, id],
-    );
+    if (newStatus === null) {
+      // Clean unmark
+      await executeSql(
+        'UPDATE lecture_instances SET status = NULL, marked_at = NULL WHERE id = ?',
+        [id],
+      );
+      await appendEditHistory(id, oldStatus, null as any);
+      return;
+    }
+
+    if (reason) {
+      await executeSql(
+        'UPDATE lecture_instances SET status = ?, notes = ?, marked_at = ? WHERE id = ?',
+        [newStatus, reason, now, id],
+      );
+    } else {
+      await executeSql(
+        'UPDATE lecture_instances SET status = ?, marked_at = ? WHERE id = ?',
+        [newStatus, now, id],
+      );
+    }
     await appendEditHistory(id, oldStatus, newStatus);
   } catch (e) {
     console.error('Failed to update instance status safely:', e);
@@ -430,15 +469,12 @@ export async function shiftLectureInstance(
   const lecture = rows[0];
   const now = new Date().toISOString();
 
-  await executeSql(
-    'UPDATE lecture_instances SET status = ?, notes = ?, marked_at = ? WHERE id = ?',
-    ['shifted', `👻 Shifted to ${newDate} ${newStartTime} (${reason})`, now, instanceId],
-  );
-
   const dateObj = parseISO(newDate);
   const newDayOfWeek = format(dateObj, 'EEEE');
 
-  await executeSql(
+  // Insert target instance with sourceId reference
+  const targetNotes = `Shifted from ${lecture.date} ${lecture.start_time} [sourceId:${lecture.id}]`;
+  const insertRes = await executeSql(
     `INSERT INTO lecture_instances
       (subject_id, date, day_of_week, start_time, end_time, status, marked_at, is_override, original_timetable_id, room, notes)
       VALUES (?, ?, ?, ?, ?, NULL, NULL, 1, ?, ?, ?)`,
@@ -450,8 +486,23 @@ export async function shiftLectureInstance(
       newEndTime,
       lecture.original_timetable_id,
       lecture.room,
-      `Shifted from ${lecture.date} ${lecture.start_time}`,
+      targetNotes,
     ],
+  );
+  const targetId = insertRes.insertId;
+
+  // Build source notes with targetId and optional permanent timetable shift metadata
+  let sourceNotes = `👻 Shifted to ${newDate} ${newStartTime} [targetId:${targetId}]`;
+  if (isPermanent && lecture.original_timetable_id) {
+    sourceNotes += ` [perm:1,origDay:${lecture.day_of_week},origStart:${lecture.start_time},origEnd:${lecture.end_time},ttId:${lecture.original_timetable_id}]`;
+  }
+  if (reason) {
+    sourceNotes += ` (${reason})`;
+  }
+
+  await executeSql(
+    'UPDATE lecture_instances SET status = ?, notes = ?, marked_at = ? WHERE id = ?',
+    ['shifted', sourceNotes, now, instanceId],
   );
 
   if (isPermanent && lecture.original_timetable_id) {
@@ -466,23 +517,106 @@ export async function unshiftLectureInstance(instanceId: number): Promise<void> 
   const instance = await getInstanceById(instanceId);
   if (!instance) return;
 
-  const now = new Date().toISOString();
-  await executeSql(
-    "UPDATE lecture_instances SET status = NULL, notes = '', marked_at = ? WHERE id = ?",
-    [now, instanceId],
-  );
+  const isSource =
+    instance.status === 'shifted' ||
+    Boolean(instance.notes && (instance.notes.includes('Shifted to') || instance.notes.includes('[targetId:')));
 
-  if (instance.notes && instance.notes.includes('Shifted to ')) {
-    const parts = instance.notes.split('Shifted to ')[1];
-    if (parts) {
-      const targetDate = parts.split(' ')[0];
+  const isTarget =
+    instance.is_override === 1 &&
+    Boolean(instance.notes && (instance.notes.includes('Shifted from') || instance.notes.includes('[sourceId:')));
+
+  if (isSource) {
+    // 1. User unshifting from the source slot (where class was originally scheduled)
+    const targetIdMatch = instance.notes?.match(/\[targetId:(\d+)\]/);
+    if (targetIdMatch) {
+      const targetId = parseInt(targetIdMatch[1], 10);
+      await executeSql('DELETE FROM lecture_instances WHERE id = ?', [targetId]);
+    } else {
+      // Fallback: match by date and time
+      const match = instance.notes?.match(/Shifted to (\d{4}-\d{2}-\d{2})(?:\s+(\d{1,2}:\d{2}))?/i);
+      const targetDate = match ? match[1] : null;
+      const targetTime = match ? match[2] : null;
       if (targetDate) {
+        if (targetTime) {
+          await executeSql(
+            'DELETE FROM lecture_instances WHERE subject_id = ? AND date = ? AND start_time = ? AND is_override = 1',
+            [instance.subject_id, targetDate, targetTime],
+          );
+        } else {
+          await executeSql(
+            'DELETE FROM lecture_instances WHERE subject_id = ? AND date = ? AND is_override = 1',
+            [instance.subject_id, targetDate],
+          );
+        }
+      }
+    }
+
+    // Revert permanent timetable shift if recorded
+    const permMatch = instance.notes?.match(/\[perm:1,origDay:([^,]+),origStart:([^,]+),origEnd:([^,]+),ttId:(\d+)\]/);
+    if (permMatch) {
+      const [, origDay, origStart, origEnd, ttId] = permMatch;
+      await executeSql(
+        'UPDATE timetable SET day_of_week = ?, start_time = ?, end_time = ? WHERE id = ?',
+        [origDay, origStart, origEnd, parseInt(ttId, 10)],
+      );
+    }
+
+    // Reset source instance
+    await executeSql(
+      "UPDATE lecture_instances SET status = NULL, notes = '', marked_at = NULL WHERE id = ?",
+      [instanceId],
+    );
+  } else if (isTarget) {
+    // 2. User unshifting from the destination slot (where class was moved to)
+    let sourceId: number | null = null;
+    const sourceIdMatch = instance.notes?.match(/\[sourceId:(\d+)\]/);
+    if (sourceIdMatch) {
+      sourceId = parseInt(sourceIdMatch[1], 10);
+    } else {
+      const match = instance.notes?.match(/Shifted from (\d{4}-\d{2}-\d{2})(?:\s+(\d{1,2}:\d{2}))?/i);
+      const sourceDate = match ? match[1] : null;
+      const sourceTime = match ? match[2] : null;
+      if (sourceDate) {
+        let sql = "SELECT id, notes FROM lecture_instances WHERE subject_id = ? AND date = ? AND status = 'shifted'";
+        let params: any[] = [instance.subject_id, sourceDate];
+        if (sourceTime) {
+          sql += ' AND start_time = ?';
+          params.push(sourceTime);
+        }
+        const sourceRes = await executeSql(sql, params);
+        const sourceRows = rowsToArray<any>(sourceRes);
+        if (sourceRows.length > 0) {
+          sourceId = sourceRows[0].id;
+        }
+      }
+    }
+
+    if (sourceId) {
+      const sourceInst = await getInstanceById(sourceId);
+      if (sourceInst) {
+        const permMatch = sourceInst.notes?.match(/\[perm:1,origDay:([^,]+),origStart:([^,]+),origEnd:([^,]+),ttId:(\d+)\]/);
+        if (permMatch) {
+          const [, origDay, origStart, origEnd, ttId] = permMatch;
+          await executeSql(
+            'UPDATE timetable SET day_of_week = ?, start_time = ?, end_time = ? WHERE id = ?',
+            [origDay, origStart, origEnd, parseInt(ttId, 10)],
+          );
+        }
         await executeSql(
-          'DELETE FROM lecture_instances WHERE subject_id = ? AND date = ? AND is_override = 1 AND notes LIKE ?',
-          [instance.subject_id, targetDate, `%Shifted from ${instance.date}%`],
+          "UPDATE lecture_instances SET status = NULL, notes = '', marked_at = NULL WHERE id = ?",
+          [sourceId],
         );
       }
     }
+
+    // Delete target instance
+    await executeSql('DELETE FROM lecture_instances WHERE id = ?', [instanceId]);
+  } else {
+    // Fallback: reset status to null
+    await executeSql(
+      "UPDATE lecture_instances SET status = NULL, notes = '', marked_at = NULL WHERE id = ?",
+      [instanceId],
+    );
   }
 }
 

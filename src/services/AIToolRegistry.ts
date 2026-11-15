@@ -7,6 +7,7 @@ import {
   updateInstanceStatus,
   markEntireDayStatus,
   shiftLectureInstance,
+  unshiftLectureInstance,
   getAttendanceStats,
   getOverallAttendanceStats,
 } from '../db/queries/lectureInstances';
@@ -116,6 +117,27 @@ export const AI_TOOL_DEFINITIONS = [
           },
         },
         required: ['subject_name', 'current_date_or_day', 'target_date', 'target_start_time'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'unshift_class',
+      description: 'Revert or unshift a shifted class back to its original timetable slot. Can be given either the original class date/day or the shifted destination date/day.',
+      parameters: {
+        type: 'object',
+        properties: {
+          subject_name: {
+            type: 'string',
+            description: 'Exact or partial name of the subject to unshift.',
+          },
+          date_or_day: {
+            type: 'string',
+            description: 'Date or day of the shifted class (e.g. "Monday", "tomorrow", "2026-11-16").',
+          },
+        },
+        required: ['subject_name'],
       },
     },
   },
@@ -463,6 +485,51 @@ export async function executeAITool(
             success: true,
             message: `Shifted ${matchedInstance.subject?.name} from ${sourceDate} (${matchedInstance.start_time}) to ${destDate} at ${target_start_time} - ${endTime}.`,
             is_permanent: Boolean(is_permanent),
+          }),
+          actionCard,
+        };
+      }
+
+      case 'unshift_class': {
+        const {subject_name, date_or_day} = args;
+        const targetDate = resolveDateString(date_or_day || 'today').dateStr;
+
+        await ensureInstancesForDate(targetDate);
+        const instances = await getInstancesForDate(targetDate);
+
+        // Find candidate matching subject
+        const query = (subject_name || '').toLowerCase().trim();
+        const matched = instances.find(i =>
+          (i.subject?.name || '').toLowerCase().includes(query) &&
+          (i.status === 'shifted' || i.is_override === 1 || (i.notes && i.notes.toLowerCase().includes('shifted')))
+        );
+
+        if (!matched) {
+          // Check if there are any shifted classes for this subject in the week
+          return {
+            result: JSON.stringify({
+              error: `Could not find a shifted class matching "${subject_name}" on ${targetDate}.`,
+            }),
+          };
+        }
+
+        await unshiftLectureInstance(matched.id);
+
+        const actionCard: AIActionCardData = {
+          type: 'shift',
+          title: '↩️ Class Shift Reverted!',
+          description: `Successfully unshifted ${matched.subject?.name} back to its original slot.`,
+          details: {
+            subject: matched.subject?.name,
+            from: targetDate,
+            status: 'Restored to original schedule',
+          },
+        };
+
+        return {
+          result: JSON.stringify({
+            success: true,
+            message: `Successfully unshifted ${matched.subject?.name} and restored its original timetable slot.`,
           }),
           actionCard,
         };

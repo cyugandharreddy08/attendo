@@ -239,6 +239,12 @@ export default function TimetableScreen() {
       setShiftSheetVisible(true);
       return;
     }
+
+    // If activeLecture was previously marked shifted away, unshift remote target first
+    if (activeLecture.status === 'shifted') {
+      await unshiftLectureInstance(activeLecture.id);
+    }
+
     const prevStatus = activeLecture.status;
     setSheetVisible(false);
     await updateInstanceStatus(activeLecture.id, status, prevStatus);
@@ -249,6 +255,15 @@ export default function TimetableScreen() {
 
   const handleUnmarkActiveLecture = async () => {
     if (!activeLecture) return;
+    const isShifted =
+      activeLecture.status === 'shifted' ||
+      (activeLecture.notes && (activeLecture.notes.includes('Shifted') || activeLecture.notes.includes('shifted')));
+
+    if (isShifted) {
+      await handleUnshiftActiveLecture();
+      return;
+    }
+
     setSheetVisible(false);
     await updateInstanceStatus(activeLecture.id, null as any, activeLecture.status);
     setActiveLecture(null);
@@ -347,7 +362,7 @@ export default function TimetableScreen() {
     <View style={styles.header}>
       <View style={styles.headerTop}>
         <TouchableOpacity onPress={() => openBulkSheetForDate(selectedDate)}>
-          <Text style={styles.brandTitle}>ATTENDO <Text style={styles.v3Badge}>v8.1.1</Text></Text>
+          <Text style={styles.brandTitle}>ATTENDO <Text style={styles.v3Badge}>v8.1.2</Text></Text>
           <Text style={styles.monthLabel}>{format(selectedDate, 'EEEE, MMMM d, yyyy')} ⚙️</Text>
         </TouchableOpacity>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.headerActionsScroll}>
@@ -574,7 +589,7 @@ export default function TimetableScreen() {
                             {inst.status && (
                               <View style={[styles.gridStatusBadge, {backgroundColor: statusColor}]}>
                                 <Text style={styles.gridStatusBadgeText}>
-                                  {inst.status === 'present' ? '✓' : inst.status === 'absent' ? '✗' : inst.status === 'holiday' ? '☀' : '⊘'}
+                                  {inst.status === 'present' ? '✓' : inst.status === 'absent' ? '✗' : inst.status === 'holiday' ? '☀' : inst.status === 'shifted' ? '↷' : '⊘'}
                                 </Text>
                               </View>
                             )}

@@ -136,9 +136,19 @@ export default function StatusBottomSheet({
     return null;
   }
 
+  const isShiftedAway = activeLecture.status === 'shifted';
+  const isShiftedHere =
+    activeLecture.is_override === 1 &&
+    Boolean(activeLecture.notes && (activeLecture.notes.includes('Shifted from') || activeLecture.notes.includes('[sourceId:')));
   const isShifted =
-    activeLecture.status === 'shifted' ||
-    (activeLecture.notes && activeLecture.notes.length > 0);
+    isShiftedAway ||
+    isShiftedHere ||
+    Boolean(activeLecture.notes && activeLecture.notes.toLowerCase().includes('shifted'));
+
+  // Clean formatted display notes without internal IDs
+  const displayNotes = activeLecture.notes
+    ? activeLecture.notes.replace(/\[(targetId|sourceId|perm)[^\]]*\]/g, '').trim()
+    : '';
 
   return (
     <View style={styles.overlayWrapper}>
@@ -176,12 +186,28 @@ export default function StatusBottomSheet({
         </View>
 
         {/* Shift Details Banner */}
-        {isShifted && activeLecture.notes ? (
+        {isShifted ? (
           <View style={styles.shiftBanner}>
-            <Text style={styles.shiftBannerTitle}>🔄 Shift Details / History</Text>
-            <Text style={styles.shiftBannerText}>{activeLecture.notes}</Text>
+            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4}}>
+              <Text style={styles.shiftBannerTitle}>
+                {isShiftedAway ? '🔄 Class Shifted Away' : '🔄 Rescheduled Class'}
+              </Text>
+              <View style={styles.shiftPill}>
+                <Text style={styles.shiftPillText}>
+                  {isShiftedAway ? 'Original Slot' : 'Shifted Slot'}
+                </Text>
+              </View>
+            </View>
+            {displayNotes ? (
+              <Text style={styles.shiftBannerText}>{displayNotes}</Text>
+            ) : null}
+            <Text style={styles.shiftHelpText}>
+              {isShiftedAway
+                ? 'This class was shifted to another date. Tap below to cancel the shift and restore this slot.'
+                : 'This class was moved here from another date. Tap below to send it back.'}
+            </Text>
             {onUnshift && (
-              <TouchableOpacity style={styles.unshiftBtn} onPress={onUnshift}>
+              <TouchableOpacity style={styles.unshiftBtn} onPress={onUnshift} activeOpacity={0.8}>
                 <Text style={styles.unshiftBtnText}>↩️ Revert / Unshift Class</Text>
               </TouchableOpacity>
             )}
@@ -464,6 +490,24 @@ const styles = StyleSheet.create({
   shiftBannerText: {
     fontSize: 12,
     color: '#F1F5F9',
+    marginBottom: 4,
+  },
+  shiftPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: 'rgba(96, 165, 250, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(96, 165, 250, 0.4)',
+  },
+  shiftPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#93C5FD',
+  },
+  shiftHelpText: {
+    fontSize: 11,
+    color: '#94A3B8',
     marginBottom: 8,
   },
   unshiftBtn: {
