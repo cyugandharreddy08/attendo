@@ -1,0 +1,12 @@
+{
+  "bundle_version": "8.1.1",
+  "bundle_url": "https://github.com/cyugandharreddy08/attendo/releases/download/v8.1.1/bundle-v8.1.1.zip",
+  "sha256": "7c359d469bc22299221b01c004caef557c1238cb06954cb03bce43391382befb",
+  "signature": "gOiYwwFGr0M3+iFQy/QAVVc2mLjtp4pZp0EcjROX95jZ8gBC8+vdsDDOuDr4vgZPk4x/bqBKyUzMc89oQJxMlGciRoKaFatioi0sYb/rKpM9jfYByls79idDNNDZQF2rhiQzNhuzQp9Dyp7/fdhqmMN197308gEmBGcToBmad/5gYbFDcjDjkjCRdZ8Wx2bLgam7XcFz4L9ZBed9gCeuO4f4KxGKyA02NKy9Dii8mIt87dLn68KbwJRSvb/l3iIkLoCYu22FJDLGQhZ/kWVi4fXiSgITdK2IpfHJXCKL2HmGUm/stcxDie+Cnfk5pHWtwGUCIsueda3ueyXEF3kf9Q==",
+  "min_native_code": 803,
+  "max_native_code": 899,
+  "rollout_percentage": 100,
+  "release_notes": "Attendo dynamic OTA update v8.1.1 with bug fixes and performance improvements.",
+  "is_mandatory": false,
+  "published_at": "2026-11-15T19:37:45.876Z"
+}

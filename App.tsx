@@ -1,4 +1,4 @@
-import React, {useEffect, useState, Component, ErrorInfo, ReactNode} from 'react';
+import React, {useEffect, useState, Component, ErrorInfo, ReactNode, useRef} from 'react';
 import {
   StatusBar,
   StyleSheet,
@@ -6,7 +6,6 @@ import {
   Text,
   Animated,
   TouchableOpacity,
-  Easing,
 } from 'react-native';
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
 import {NavigationContainer} from '@react-navigation/native';
@@ -18,9 +17,10 @@ import {linking} from './src/navigation/linking';
 import {initDatabase} from './src/db/database';
 import {generateTodayInstances} from './src/db/queries/lectureInstances';
 import {scheduleEndOfDayNudge, scheduleClassReminders} from './src/services/NotificationService';
-import {ModernOTAService, checkForJSUpdate, checkForNativeUpdate} from './src/services/OTAService';
+import {ModernOTAService} from './src/services/OTAService';
 import {initAccountSyncEngine} from './src/services/AccountSyncService';
 import ForceUpdateModal from './src/components/ForceUpdateModal';
+import PixelAssemblySplashScreen, {OTAProgressInfo} from './src/components/PixelAssemblySplashScreen';
 import {Colors} from './src/theme/colors';
 
 interface Props {
@@ -75,63 +75,13 @@ class ErrorBoundary extends Component<Props, State> {
 
 function App(): React.JSX.Element {
   const [isAppReady, setIsAppReady] = useState(false);
-
-  // Cinematic Multi-Phase Animation Values
-  const [ringRotate] = useState(new Animated.Value(0));
-  const [pulseScale] = useState(new Animated.Value(0.4));
-  const [logoScale] = useState(new Animated.Value(0.1));
-  const [logoOpacity] = useState(new Animated.Value(0));
-  const [titleTranslateY] = useState(new Animated.Value(30));
-  const [titleOpacity] = useState(new Animated.Value(0));
-  const [splashFade] = useState(new Animated.Value(1));
+  const [animDone, setAnimDone] = useState(false);
+  const [bootDone, setBootDone] = useState(false);
+  const [otaProgress, setOtaProgress] = useState<OTAProgressInfo | undefined>(undefined);
+  const splashFade = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // 1. Cyber Ring Continuous Rotation
-    Animated.loop(
-      Animated.timing(ringRotate, {
-        toValue: 1,
-        duration: 3000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }),
-    ).start();
-
-    // 2. Multi-Phase Portal & Emblem Reveal Sequence
-    Animated.sequence([
-      // Phase 1: Electric Pulse Expand
-      Animated.timing(pulseScale, {
-        toValue: 1.2,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-      // Phase 2: Logo Spring Zoom & Fade
-      Animated.parallel([
-        Animated.spring(logoScale, {
-          toValue: 1,
-          friction: 4,
-          tension: 40,
-          useNativeDriver: true,
-        }),
-        Animated.timing(logoOpacity, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-      ]),
-      // Phase 3: Title Slide Up
-      Animated.parallel([
-        Animated.timing(titleTranslateY, {
-          toValue: 0,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-        Animated.timing(titleOpacity, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]).start();
+    let isMounted = true;
 
     const boot = async () => {
       try {
@@ -142,75 +92,60 @@ function App(): React.JSX.Element {
         await scheduleClassReminders(10);
         // Enterprise OTA Boot Confirmation & Check
         ModernOTAService.confirmBoot();
-        checkForJSUpdate();
-        checkForNativeUpdate();
+        ModernOTAService.checkForUpdates({
+          onProgress: (info) => {
+            if (isMounted) {
+              setOtaProgress(info);
+            }
+          },
+        }).catch(e => console.warn('OTA boot check error:', e));
       } catch (e) {
         console.error('Boot error:', e);
       } finally {
-        setTimeout(() => {
-          Animated.timing(splashFade, {
-            toValue: 0,
-            duration: 500,
-            useNativeDriver: true,
-          }).start(() => setIsAppReady(true));
-        }, 1800);
+        if (isMounted) {
+          setBootDone(true);
+        }
       }
     };
+
     boot();
+
+    // Safety timeout in case network or database stalls
+    const timeout = setTimeout(() => {
+      if (isMounted) {
+        setBootDone(true);
+      }
+    }, 4500);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeout);
+    };
   }, []);
 
-  const spin = ringRotate.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
+  useEffect(() => {
+    if (animDone && bootDone) {
+      // If OTA update is currently actively downloading or verifying, hold to show progress
+      if (otaProgress?.status === 'downloading' || otaProgress?.status === 'verifying') {
+        return;
+      }
+
+      Animated.timing(splashFade, {
+        toValue: 0,
+        duration: 450,
+        useNativeDriver: true,
+      }).start(() => setIsAppReady(true));
+    }
+  }, [animDone, bootDone, otaProgress?.status, splashFade]);
 
   if (!isAppReady) {
     return (
-      <Animated.View style={[styles.splashContainer, {opacity: splashFade}]}>
+      <Animated.View style={[styles.root, {opacity: splashFade}]}>
         <StatusBar barStyle="light-content" backgroundColor="#05050A" />
-
-        {/* Ambient Pulsing Glow Circle */}
-        <Animated.View
-          style={[
-            styles.glowCircle,
-            {transform: [{scale: pulseScale}]},
-          ]}
+        <PixelAssemblySplashScreen
+          progressInfo={otaProgress}
+          onAnimationComplete={() => setAnimDone(true)}
         />
-
-        {/* Rotating Cyber Ring */}
-        <Animated.View
-          style={[
-            styles.cyberRing,
-            {transform: [{rotate: spin}]},
-          ]}
-        />
-
-        {/* 3D Shield Emblem Logo */}
-        <Animated.View
-          style={[
-            styles.logoContainer,
-            {
-              opacity: logoOpacity,
-              transform: [{scale: logoScale}],
-            },
-          ]}>
-          <View style={styles.shieldBadge}>
-            <Text style={styles.shieldText}>A</Text>
-          </View>
-        </Animated.View>
-
-        {/* ATTENDO Title Slide Up */}
-        <Animated.View
-          style={[
-            styles.titleContainer,
-            {
-              opacity: titleOpacity,
-              transform: [{translateY: titleTranslateY}],
-            },
-          ]}>
-          <Text style={styles.splashTitle}>ATTENDO</Text>
-          <Text style={styles.splashSubtitle}>75% Attendance & Task Shield</Text>
-        </Animated.View>
       </Animated.View>
     );
   }
@@ -251,70 +186,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: Colors.background,
-  },
-  splashContainer: {
-    flex: 1,
-    backgroundColor: '#05050A',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  glowCircle: {
-    position: 'absolute',
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: 'rgba(139, 92, 246, 0.25)',
-  },
-  cyberRing: {
-    position: 'absolute',
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    borderWidth: 2,
-    borderColor: 'rgba(6, 182, 212, 0.5)',
-    borderStyle: 'dashed',
-  },
-  logoContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  shieldBadge: {
-    width: 100,
-    height: 100,
-    borderRadius: 30,
-    backgroundColor: '#8B5CF6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#8B5CF6',
-    shadowOffset: {width: 0, height: 10},
-    shadowOpacity: 0.8,
-    shadowRadius: 20,
-    elevation: 15,
-    borderWidth: 2,
-    borderColor: '#06B6D4',
-  },
-  shieldText: {
-    fontSize: 54,
-    fontWeight: '900',
-    color: '#FFFFFF',
-  },
-  titleContainer: {
-    alignItems: 'center',
-  },
-  splashTitle: {
-    fontSize: 36,
-    fontWeight: '900',
-    color: '#F0F0FF',
-    letterSpacing: 4,
-  },
-  splashSubtitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#8B5CF6',
-    letterSpacing: 1.5,
-    marginTop: 6,
-    textTransform: 'uppercase',
   },
   errorContainer: {
     flex: 1,

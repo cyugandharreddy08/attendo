@@ -363,7 +363,7 @@ export default function SettingsScreen() {
       </SettingsSection>
 
       <SettingsSection title="About">
-        <SettingsRow label="App Version" description="8.1.0 (Proxy AI Wingman & Cloud Vault Active)" />
+        <SettingsRow label="App Version" description="8.1.1 (Proxy AI Wingman & 3D Pixel Shield)" />
         <SettingsRow label="Cloud Backend" description="Supabase + Gemini 2.0 Flash AI" />
         <SettingsRow label="DB Engine" description="SQLite 3 + Continuous Postgres Sync" />
       </SettingsSection>

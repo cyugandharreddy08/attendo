@@ -5,8 +5,9 @@ const { execSync } = require('child_process');
 
 const packageJson = require('../package.json');
 const version = process.argv[2] || packageJson.version;
-const minNativeCode = parseInt(process.argv[3] || '1', 10);
-const rolloutPercentage = parseInt(process.argv[4] || '100', 10);
+const minNativeCode = parseInt(process.argv[3] || '803', 10);
+const maxNativeCode = parseInt(process.argv[4] || '899', 10);
+const rolloutPercentage = parseInt(process.argv[5] || '100', 10);
 
 const rootDir = path.join(__dirname, '..');
 const distDir = path.join(rootDir, 'dist_ota');
@@ -69,7 +70,7 @@ const manifest = {
   sha256: sha256,
   signature: signature,
   min_native_code: minNativeCode,
-  max_native_code: minNativeCode,
+  max_native_code: maxNativeCode,
   rollout_percentage: rolloutPercentage,
   release_notes: `Attendo dynamic OTA update v${version} with bug fixes and performance improvements.`,
   is_mandatory: false,

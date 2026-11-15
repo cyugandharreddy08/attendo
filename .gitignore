@@ -41,6 +41,8 @@ replay_pid*.log
 *.pem
 ota_keys/
 dist_ota/
+build_ota/
+bundle-*.zip
 
 # Metro / Buck
 .buckd

@@ -38,6 +38,15 @@ export function computeRolloutBucket(identifier: string): number {
   return Math.abs(hash % 100);
 }
 
+export type OTAProgressCallback = (progress: {
+  status: 'checking' | 'downloading' | 'verifying' | 'ready' | 'none';
+  percentage: number;
+  message: string;
+  version?: string;
+  bytesReceived?: number;
+  totalBytes?: number;
+}) => void;
+
 export class ModernOTAService {
   private static bootConfirmed = false;
 
@@ -78,12 +87,23 @@ export class ModernOTAService {
   /**
    * Checks for updates and coordinates cryptographic bundle download and staging.
    */
-  static async checkForUpdates(options: { isManual?: boolean } = {}): Promise<void> {
+  static async checkForUpdates(options: {
+    isManual?: boolean;
+    onProgress?: OTAProgressCallback;
+  } = {}): Promise<void> {
     if (Platform.OS !== 'android' || !OTANativeModule) {
       return;
     }
 
+    const { onProgress } = options;
+
     try {
+      onProgress?.({
+        status: 'checking',
+        percentage: 15,
+        message: 'Checking for dynamic updates...',
+      });
+
       const currentStatus = await this.getOTAStatus();
       const currentActive = currentStatus?.activeVersion || APP_VERSION;
 
@@ -127,6 +147,11 @@ export class ModernOTAService {
       }
 
       if (!manifest) {
+        onProgress?.({
+          status: 'none',
+          percentage: 100,
+          message: 'Attendo is running the latest verified release.',
+        });
         if (options.isManual) {
           Alert.alert('⚡ System Up to Date', `Attendo is running the latest verified release (v${currentActive}).`);
         }
@@ -149,6 +174,11 @@ export class ModernOTAService {
 
       // 4. Version Check: Is the remote bundle newer than our active version?
       if (!this.isVersionNewer(manifest.bundle_version, currentActive)) {
+        onProgress?.({
+          status: 'none',
+          percentage: 100,
+          message: `Attendo v${currentActive} is up to date.`,
+        });
         if (options.isManual) {
           Alert.alert('⚡ System Up to Date', `Attendo is running the latest verified release (v${currentActive}).`);
         }
@@ -166,13 +196,34 @@ export class ModernOTAService {
         }
       }
 
-      // 6. Download Bundle Package Archive (~2-4 MB)
+      // 6. Download Bundle Package Archive (~600 KB)
       console.log(`[ModernOTA] Downloading OTA package for v${manifest.bundle_version}...`);
+      onProgress?.({
+        status: 'downloading',
+        percentage: 30,
+        version: manifest.bundle_version,
+        message: `Downloading OTA update v${manifest.bundle_version}...`,
+      });
+
       const tempPath = `${RNBlobUtil.fs.dirs.CacheDir}/ota_download_${Date.now()}.zip`;
 
       const res = await RNBlobUtil.config({
         path: tempPath,
-      }).fetch('GET', manifest.bundle_url);
+      })
+        .fetch('GET', manifest.bundle_url)
+        .progress((received, total) => {
+          const totalNum = Number(total) || 630000;
+          const recNum = Number(received) || 0;
+          const pct = Math.min(85, Math.round(30 + (recNum / totalNum) * 55));
+          onProgress?.({
+            status: 'downloading',
+            percentage: pct,
+            version: manifest?.bundle_version,
+            bytesReceived: recNum,
+            totalBytes: totalNum,
+            message: `Downloading update (${Math.round(recNum / 1024)} KB / ${Math.round(totalNum / 1024)} KB)...`,
+          });
+        });
 
       const statusCode = res.info().status;
       if (statusCode !== 200) {
@@ -180,6 +231,13 @@ export class ModernOTAService {
       }
 
       // 7. Hand over to Native Module for Cryptographic Verification & Atomic Staging
+      onProgress?.({
+        status: 'verifying',
+        percentage: 90,
+        version: manifest.bundle_version,
+        message: 'Verifying RSA-2048 cryptographic signature...',
+      });
+
       const stageResult = await OTANativeModule.stageUpdate(
         tempPath,
         manifest.sha256,
@@ -188,6 +246,13 @@ export class ModernOTAService {
       );
 
       if (stageResult?.success) {
+        onProgress?.({
+          status: 'ready',
+          percentage: 100,
+          version: manifest.bundle_version,
+          message: `Update v${manifest.bundle_version} verified and staged!`,
+        });
+
         Alert.alert(
           '⚡ Update Ready',
           `Attendo v${manifest.bundle_version} has been verified and staged. It will automatically activate on your next launch, or you can restart now.`,
@@ -204,6 +269,11 @@ export class ModernOTAService {
       }
     } catch (err: any) {
       console.warn('[ModernOTA] Update check or download error:', err?.message || err);
+      onProgress?.({
+        status: 'none',
+        percentage: 100,
+        message: 'Ready.',
+      });
       if (options.isManual) {
         Alert.alert('Update Check Notice', 'Could not complete the update check. Please verify your internet connection.');
       }

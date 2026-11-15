@@ -28,6 +28,104 @@ const QUICK_PROMPTS = [
   '⚠️ Which subjects are in the danger zone?',
 ];
 
+interface MarkdownBlock {
+  type: 'paragraph' | 'table' | 'heading' | 'callout' | 'bullet';
+  level?: number;
+  text?: string;
+  headers?: string[];
+  rows?: string[][];
+}
+
+function parseMarkdownBlocks(text: string): MarkdownBlock[] {
+  const lines = text.split('\n');
+  const blocks: MarkdownBlock[] = [];
+  let currentTable: {type: 'table'; headers: string[]; rows: string[][]} | null = null;
+  let currentParagraph: string[] = [];
+
+  const flushParagraph = () => {
+    if (currentParagraph.length > 0) {
+      blocks.push({
+        type: 'paragraph',
+        text: currentParagraph.join('\n'),
+      });
+      currentParagraph = [];
+    }
+  };
+
+  const flushTable = () => {
+    if (currentTable) {
+      blocks.push(currentTable);
+      currentTable = null;
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    const line = rawLine.trim();
+
+    const isTableRow = line.startsWith('|') && line.endsWith('|') && line.length > 2;
+    const isTableSeparator = isTableRow && /^\|[-:\s|]+\|$/.test(line);
+
+    if (isTableRow) {
+      flushParagraph();
+      const cells = line.split('|').slice(1, -1).map(c => c.trim());
+
+      if (!currentTable) {
+        const nextLine = lines[i + 1]?.trim() || '';
+        if (nextLine.startsWith('|') && /^\|[-:\s|]+\|$/.test(nextLine)) {
+          currentTable = {
+            type: 'table',
+            headers: cells,
+            rows: [],
+          };
+          i++; // skip separator line
+          continue;
+        }
+      } else {
+        if (!isTableSeparator) {
+          currentTable.rows.push(cells);
+        }
+        continue;
+      }
+    } else {
+      flushTable();
+    }
+
+    if (!isTableRow) {
+      if (line.startsWith('### ')) {
+        flushParagraph();
+        blocks.push({type: 'heading', level: 3, text: line.replace('### ', '')});
+      } else if (line.startsWith('## ')) {
+        flushParagraph();
+        blocks.push({type: 'heading', level: 2, text: line.replace('## ', '')});
+      } else if (line.startsWith('# ')) {
+        flushParagraph();
+        blocks.push({type: 'heading', level: 1, text: line.replace('# ', '')});
+      } else if (
+        line.startsWith('> ') ||
+        line.startsWith('⚠️') ||
+        line.startsWith('🚨') ||
+        line.startsWith('💡') ||
+        line.startsWith('🌴')
+      ) {
+        flushParagraph();
+        blocks.push({type: 'callout', text: line.replace(/^>\s*/, '')});
+      } else if (line.startsWith('• ') || line.startsWith('- ') || line.startsWith('* ')) {
+        flushParagraph();
+        blocks.push({type: 'bullet', text: line.replace(/^([•\-\*]\s+)/, '')});
+      } else if (line === '') {
+        flushParagraph();
+      } else {
+        currentParagraph.push(rawLine);
+      }
+    }
+  }
+
+  flushTable();
+  flushParagraph();
+  return blocks;
+}
+
 export default function AIAssistantScreen({navigation}: any) {
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
@@ -157,30 +255,239 @@ export default function AIAssistantScreen({navigation}: any) {
     );
   };
 
-  // Helper to render bold markdown (**text**) and lists neatly
-  const renderFormattedText = (raw: string, isUser: boolean) => {
-    const lines = raw.split('\n');
-    return lines.map((line, lIdx) => {
-      // Split line by bold segments
-      const parts = line.split(/(\*\*.*?\*\*)/g);
-      return (
-        <Text
-          key={lIdx}
-          style={[
-            styles.messageText,
-            isUser ? styles.userMessageText : styles.assistantMessageText,
-            line.trim() === '' && {height: 6},
-          ]}>
-          {parts.map((p, pIdx) => {
-            if (p.startsWith('**') && p.endsWith('**')) {
-              return (
-                <Text key={pIdx} style={styles.boldText}>
-                  {p.slice(2, -2)}
-                </Text>
-              );
-            }
-            return <Text key={pIdx}>{p}</Text>;
+  // Helper to render bold markdown (**text**), percentages, and arrows neatly
+  const renderInlineFormatted = (raw: string, isUser: boolean, isCallout: boolean = false) => {
+    const parts = raw.split(/(\*\*.*?\*\*)/g);
+    return parts.map((p, pIdx) => {
+      if (p.startsWith('**') && p.endsWith('**')) {
+        const boldContent = p.slice(2, -2);
+        return (
+          <Text
+            key={pIdx}
+            style={[
+              styles.boldText,
+              isUser ? {color: '#FFFFFF'} : {color: '#F4F4FF'},
+              isCallout && {color: '#FFFFFF', fontWeight: 'bold'},
+            ]}>
+            {boldContent}
+          </Text>
+        );
+      }
+      return <Text key={pIdx}>{p}</Text>;
+    });
+  };
+
+  // Render a Rich Table with column styling, chips, and neon accents
+  const renderTableBlock = (headers: string[] = [], rows: string[][] = [], key: string) => {
+    if (headers.length === 0 && rows.length === 0) return null;
+
+    const isWide = headers.length > 3;
+
+    const renderTableContent = () => (
+      <View style={styles.tableCard}>
+        {/* Table Header Row */}
+        <View style={styles.tableHeaderRow}>
+          {headers.map((h, hIdx) => {
+            const hLower = h.toLowerCase();
+            let flexVal = 1;
+            if (hLower.includes('sub')) flexVal = 1.6;
+            else if (hLower.includes('time') || hLower.includes('hour')) flexVal = 1.3;
+            else if (hLower.includes('stat') || hLower.includes('room')) flexVal = 0.9;
+
+            return (
+              <View
+                key={hIdx}
+                style={[
+                  styles.tableHeaderCell,
+                  !isWide && {flex: flexVal},
+                  isWide && {width: 110},
+                ]}>
+                <Text style={styles.tableHeaderText}>{h.toUpperCase()}</Text>
+              </View>
+            );
           })}
+        </View>
+
+        {/* Table Data Rows */}
+        {rows.map((row, rIdx) => {
+          const isOdd = rIdx % 2 === 1;
+          return (
+            <View
+              key={rIdx}
+              style={[
+                styles.tableDataRow,
+                isOdd && styles.tableDataRowOdd,
+                rIdx === rows.length - 1 && {borderBottomWidth: 0},
+              ]}>
+              {row.map((cell, cIdx) => {
+                const headerName = (headers[cIdx] || '').toLowerCase();
+                let flexVal = 1;
+                if (headerName.includes('sub')) flexVal = 1.6;
+                else if (headerName.includes('time') || headerName.includes('hour')) flexVal = 1.3;
+                else if (headerName.includes('stat') || headerName.includes('room')) flexVal = 0.9;
+
+                const isSubject = headerName.includes('sub');
+                const isTime = headerName.includes('time') || headerName.includes('hour');
+                const isRoom = headerName.includes('room');
+                const isStatus =
+                  headerName.includes('stat') ||
+                  cell.includes('🟢') ||
+                  cell.includes('🔴') ||
+                  cell.toLowerCase().includes('safe') ||
+                  cell.toLowerCase().includes('danger') ||
+                  cell.toLowerCase().includes('regular');
+
+                const isCritical =
+                  cell.toLowerCase().includes('danger') ||
+                  cell.toLowerCase().includes('critical') ||
+                  cell.includes('🔴') ||
+                  cell.toLowerCase().includes('at risk');
+                const isSafe =
+                  cell.toLowerCase().includes('safe') ||
+                  cell.includes('🟢') ||
+                  cell.toLowerCase().includes('regular');
+
+                return (
+                  <View
+                    key={cIdx}
+                    style={[
+                      styles.tableDataCell,
+                      !isWide && {flex: flexVal},
+                      isWide && {width: 110},
+                    ]}>
+                    {isStatus ? (
+                      <View
+                        style={[
+                          styles.tableStatusChip,
+                          isCritical && styles.tableStatusChipCritical,
+                          isSafe && styles.tableStatusChipSafe,
+                        ]}>
+                        <Text
+                          style={[
+                            styles.tableStatusText,
+                            isCritical && {color: Colors.absent},
+                            isSafe && {color: Colors.present},
+                          ]}>
+                          {cell}
+                        </Text>
+                      </View>
+                    ) : isRoom ? (
+                      <View style={styles.tableRoomChip}>
+                        <Text style={styles.tableRoomText}>📍 {cell.replace('📍', '').trim()}</Text>
+                      </View>
+                    ) : (
+                      <View style={isSubject ? styles.subjectCellWrapper : null}>
+                        {isSubject && <View style={styles.subjectDot} />}
+                        <Text
+                          style={[
+                            styles.tableCellText,
+                            isSubject && styles.tableCellSubjectText,
+                            isTime && styles.tableCellTimeText,
+                          ]}
+                          numberOfLines={2}>
+                          {renderInlineFormatted(cell, false)}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          );
+        })}
+      </View>
+    );
+
+    if (isWide) {
+      return (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} key={key} style={styles.tableScroll}>
+          {renderTableContent()}
+        </ScrollView>
+      );
+    }
+    return <View key={key}>{renderTableContent()}</View>;
+  };
+
+  // Render full message parsed into structured blocks
+  const renderMessageBlocks = (content: string, isUser: boolean) => {
+    if (isUser) {
+      return (
+        <Text style={[styles.messageText, styles.userMessageText]}>
+          {renderInlineFormatted(content, true)}
+        </Text>
+      );
+    }
+
+    const blocks = parseMarkdownBlocks(content);
+
+    return blocks.map((block, idx) => {
+      const blockKey = `blk_${idx}`;
+
+      if (block.type === 'table') {
+        return renderTableBlock(block.headers, block.rows, blockKey);
+      }
+
+      if (block.type === 'heading') {
+        const isH2 = block.level === 2;
+        return (
+          <View
+            key={blockKey}
+            style={[styles.headingWrapper, isH2 && styles.heading2Wrapper]}>
+            <View style={styles.headingAccentPill} />
+            <Text style={[styles.headingText, isH2 && styles.heading2Text]}>
+              {block.text}
+            </Text>
+          </View>
+        );
+      }
+
+      if (block.type === 'callout') {
+        const text = block.text || '';
+        const isDanger =
+          text.includes('⚠️') ||
+          text.toLowerCase().includes('danger') ||
+          text.toLowerCase().includes('detention') ||
+          text.toLowerCase().includes('critical');
+        const isSafe =
+          text.includes('🌴') ||
+          text.toLowerCase().includes('safe') ||
+          text.toLowerCase().includes('congrat');
+
+        return (
+          <View
+            key={blockKey}
+            style={[
+              styles.calloutCard,
+              isDanger && styles.calloutDanger,
+              isSafe && styles.calloutSafe,
+            ]}>
+            <Text
+              style={[
+                styles.calloutText,
+                isDanger && styles.calloutTextDanger,
+                isSafe && styles.calloutTextSafe,
+              ]}>
+              {renderInlineFormatted(text, false, true)}
+            </Text>
+          </View>
+        );
+      }
+
+      if (block.type === 'bullet') {
+        return (
+          <View key={blockKey} style={styles.bulletRow}>
+            <View style={styles.bulletDot} />
+            <Text style={styles.bulletText}>
+              {renderInlineFormatted(block.text || '', false)}
+            </Text>
+          </View>
+        );
+      }
+
+      // Paragraph
+      return (
+        <Text key={blockKey} style={[styles.messageText, styles.assistantMessageText]}>
+          {renderInlineFormatted(block.text || '', false)}
         </Text>
       );
     });
@@ -240,7 +547,7 @@ export default function AIAssistantScreen({navigation}: any) {
                   styles.bubble,
                   isUser ? styles.userBubble : styles.aiBubble,
                 ]}>
-                {renderFormattedText(msg.content, isUser)}
+                {renderMessageBlocks(msg.content, isUser)}
                 {msg.actionCard && renderActionCard(msg.actionCard)}
                 <Text
                   style={[
@@ -262,7 +569,7 @@ export default function AIAssistantScreen({navigation}: any) {
             <View style={[styles.bubble, styles.aiBubble, styles.loadingBubble]}>
               <ActivityIndicator size="small" color={Colors.primary} />
               <Text style={styles.loadingText}>
-                Proxy is checking your schedule & calculations...
+                Proxy is calculating schedule & attendance impact...
               </Text>
             </View>
           </View>
@@ -472,15 +779,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   bubble: {
-    maxWidth: '82%',
     padding: Spacing.md,
     borderRadius: 18,
   },
   userBubble: {
+    maxWidth: '82%',
     backgroundColor: Colors.primary,
     borderBottomRightRadius: 4,
   },
   aiBubble: {
+    maxWidth: '94%',
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -489,6 +797,7 @@ const styles = StyleSheet.create({
   messageText: {
     ...Typography.body2,
     lineHeight: 22,
+    marginVertical: 2,
   },
   userMessageText: {
     color: '#FFFFFF',
@@ -511,6 +820,193 @@ const styles = StyleSheet.create({
   aiTimeText: {
     color: Colors.textMuted,
   },
+
+  // Table Card Styles
+  tableScroll: {
+    marginVertical: 6,
+  },
+  tableCard: {
+    backgroundColor: '#12121E',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#26263B',
+    overflow: 'hidden',
+    marginVertical: 6,
+  },
+  tableHeaderRow: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(139, 92, 246, 0.18)',
+    borderBottomWidth: 1,
+    borderBottomColor: '#363652',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+  },
+  tableHeaderCell: {
+    paddingHorizontal: 4,
+    justifyContent: 'center',
+  },
+  tableHeaderText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#C4B5FD',
+    letterSpacing: 0.8,
+  },
+  tableDataRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+    paddingVertical: 9,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+  },
+  tableDataRowOdd: {
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+  },
+  tableDataCell: {
+    paddingHorizontal: 4,
+    justifyContent: 'center',
+  },
+  tableCellText: {
+    fontSize: 12,
+    color: Colors.textPrimary,
+    lineHeight: 16,
+  },
+  tableCellSubjectText: {
+    fontWeight: '700',
+    color: '#F4F4FF',
+  },
+  tableCellTimeText: {
+    color: '#A0A0C0',
+    fontSize: 11,
+  },
+  subjectCellWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  subjectDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.primaryLight,
+  },
+  tableStatusChip: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceElevated,
+    alignSelf: 'flex-start',
+  },
+  tableStatusChipSafe: {
+    borderColor: 'rgba(34, 197, 94, 0.4)',
+    backgroundColor: 'rgba(34, 197, 94, 0.12)',
+  },
+  tableStatusChipCritical: {
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+  },
+  tableStatusText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  tableRoomChip: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(96, 165, 250, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(96, 165, 250, 0.3)',
+    alignSelf: 'flex-start',
+  },
+  tableRoomText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#93C5FD',
+  },
+
+  // Headings
+  headingWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  heading2Wrapper: {
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  headingAccentPill: {
+    width: 3,
+    height: 14,
+    borderRadius: 1.5,
+    backgroundColor: Colors.primaryLight,
+  },
+  headingText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#C4B5FD',
+  },
+  heading2Text: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#EDE9FE',
+  },
+
+  // Callouts
+  calloutCard: {
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.primary,
+    padding: 10,
+    borderRadius: 8,
+    marginVertical: 6,
+  },
+  calloutDanger: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderLeftColor: Colors.absent,
+  },
+  calloutSafe: {
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    borderLeftColor: Colors.present,
+  },
+  calloutText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#DDD6FE',
+  },
+  calloutTextDanger: {
+    color: '#FCA5A5',
+  },
+  calloutTextSafe: {
+    color: '#86EFAC',
+  },
+
+  // Bullets
+  bulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginVertical: 2,
+    paddingLeft: 4,
+  },
+  bulletDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: Colors.primaryLight,
+    marginTop: 8,
+    marginRight: 8,
+  },
+  bulletText: {
+    flex: 1,
+    ...Typography.body2,
+    color: Colors.textPrimary,
+    lineHeight: 20,
+  },
+
   loadingBubbleWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
