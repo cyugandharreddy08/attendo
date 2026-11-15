@@ -347,10 +347,21 @@ export default function TimetableScreen() {
     <View style={styles.header}>
       <View style={styles.headerTop}>
         <TouchableOpacity onPress={() => openBulkSheetForDate(selectedDate)}>
-          <Text style={styles.brandTitle}>ATTENDO <Text style={styles.v3Badge}>v8.0.3</Text></Text>
+          <Text style={styles.brandTitle}>ATTENDO <Text style={styles.v3Badge}>v8.1.0</Text></Text>
           <Text style={styles.monthLabel}>{format(selectedDate, 'EEEE, MMMM d, yyyy')} ⚙️</Text>
         </TouchableOpacity>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.headerActionsScroll}>
+          <AnimatedPressable
+            physics="bouncy"
+            scaleTo={0.92}
+            translateYOnPress={1.5}
+            glowOnPress={true}
+            glowColor="#8B5CF6"
+            hapticType="impactMedium"
+            style={[styles.holidayBtn, {borderColor: '#8B5CF6', backgroundColor: '#8B5CF625'}]}
+            onPress={() => navigation.navigate('AIAssistant')}>
+            <Text style={[styles.holidayBtnText, {color: '#C4B5FD', fontWeight: 'bold'}]}>✨ Ask Proxy</Text>
+          </AnimatedPressable>
           <AnimatedPressable
             physics="bouncy"
             scaleTo={0.92}

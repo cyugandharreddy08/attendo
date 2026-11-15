@@ -20,8 +20,8 @@ android {
         applicationId "com.tracker75"
         minSdk rootProject.ext.minSdkVersion
         targetSdk rootProject.ext.targetSdkVersion
-        versionCode 803
-        versionName "8.0.3"
+        versionCode 810
+        versionName "8.1.0"
     }
 
     signingConfigs {

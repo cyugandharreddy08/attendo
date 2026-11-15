@@ -246,6 +246,20 @@ export default function SettingsScreen() {
         />
       </SettingsSection>
 
+      <SettingsSection title="Proxy AI Wingman">
+        <SettingsRow
+          label="✨ Open Proxy AI"
+          description="Plan bunks, simulate attendance drop & shift timetable slots"
+          right={
+            <TouchableOpacity
+              style={[styles.actionBtn, {backgroundColor: Colors.primary, borderColor: Colors.primary}]}
+              onPress={() => navigation.navigate('AIAssistant')}>
+              <Text style={[styles.actionBtnText, {color: '#FFF', fontWeight: 'bold'}]}>Chat →</Text>
+            </TouchableOpacity>
+          }
+        />
+      </SettingsSection>
+
       <SettingsSection title="Timetable & Data Management">
         <SettingsRow
           label="Clear Timetable Only"
@@ -349,7 +363,7 @@ export default function SettingsScreen() {
       </SettingsSection>
 
       <SettingsSection title="About">
-        <SettingsRow label="App Version" description="8.0.3 (Real-Time Physics & Cloud Sync Active)" />
+        <SettingsRow label="App Version" description="8.1.0 (Proxy AI Wingman & Cloud Vault Active)" />
         <SettingsRow label="Cloud Backend" description="Supabase + Gemini 2.0 Flash AI" />
         <SettingsRow label="DB Engine" description="SQLite 3 + Continuous Postgres Sync" />
       </SettingsSection>

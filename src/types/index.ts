@@ -145,6 +145,7 @@ export type RootStackParamList = {
   StudentSearch: {initialCollege?: string} | undefined;
   PublicProfile: {profile?: StudentProfile; username?: string; profileId?: string};
   CalendarHeatmap: undefined;
+  AIAssistant: undefined;
 };
 
 export type BottomTabParamList = {

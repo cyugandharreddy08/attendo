@@ -21,6 +21,7 @@ import StudentSearchScreen from '../screens/StudentSearchScreen';
 import PublicProfileScreen from '../screens/PublicProfileScreen';
 import PhoneAuthScreen from '../screens/PhoneAuthScreen';
 import AccountSyncScreen from '../screens/AccountSyncScreen';
+import AIAssistantScreen from '../screens/AIAssistantScreen';
 import AnimatedCustomTabBar from '../components/AnimatedCustomTabBar';
 import {RootStackParamList, BottomTabParamList} from '../types';
 
@@ -117,6 +118,11 @@ export default function AppNavigator() {
         name="CalendarHeatmap"
         component={CalendarHeatmapScreen}
         options={{animation: 'slide_from_right'}}
+      />
+      <Stack.Screen
+        name="AIAssistant"
+        component={AIAssistantScreen}
+        options={{animation: 'slide_from_bottom', presentation: 'fullScreenModal'}}
       />
     </Stack.Navigator>
   );
