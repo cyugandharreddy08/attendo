@@ -26,6 +26,7 @@ import {AuthService} from '../services/AuthService';
 import {StudentProfile} from '../types';
 import AnimatedPressable from '../components/AnimatedPressable';
 import {AccountSyncService} from '../services/AccountSyncService';
+import AttendoVectorLogo from '../components/AttendoVectorLogo';
 
 const REMINDER_OPTIONS = [
   {label: '10 mins', value: 10},
@@ -167,7 +168,13 @@ export default function SettingsScreen() {
     <ScrollView
       style={[styles.container, {paddingTop: insets.top}]}
       contentContainerStyle={styles.content}>
-      <Text style={styles.pageTitle}>Settings</Text>
+      <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 16}}>
+        <AttendoVectorLogo size={46} variant="floating" style={{marginRight: 12}} />
+        <View>
+          <Text style={styles.pageTitle}>Settings</Text>
+          <Text style={{color: '#93C5FD', fontSize: 12, letterSpacing: 0.5}}>Official Attendo Brand & System Controls</Text>
+        </View>
+      </View>
 
       {/* Account Security Code & Real-Time Cloud Sync Card */}
       <View style={styles.vaultCard}>
@@ -363,7 +370,7 @@ export default function SettingsScreen() {
       </SettingsSection>
 
       <SettingsSection title="About">
-        <SettingsRow label="App Version" description="8.1.2 (Clean Unshift Engine & 3D Logo Vortex)" />
+        <SettingsRow label="App Version" description="8.1.3 (Official Brand Logo, Native Concept Intro & Clean Unshift)" />
         <SettingsRow label="Cloud Backend" description="Supabase + Gemini 2.0 Flash AI" />
         <SettingsRow label="DB Engine" description="SQLite 3 + Continuous Postgres Sync" />
       </SettingsSection>

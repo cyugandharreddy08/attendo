@@ -1,59 +1,62 @@
 export const Colors = {
-  background: '#05050A',
-  card: '#101018',
-  surface: '#181824',
-  surfaceElevated: '#202030',
-  border: '#272738',
-  borderLight: '#3B3B54',
+  background: '#040814',
+  card: '#0A152A',
+  surface: '#10203E',
+  surfaceElevated: '#172C54',
+  border: '#1E3B6E',
+  borderLight: '#2C5499',
 
-  textPrimary: '#F4F4FF',
-  text: '#F4F4FF',
-  textSecondary: '#9494B8',
-  textMuted: '#5C5C7A',
+  textPrimary: '#F0F9FF',
+  text: '#F0F9FF',
+  textSecondary: '#93C5FD',
+  textMuted: '#64748B',
 
-  primary: '#8B5CF6',
-  primaryLight: '#A855F7',
+  primary: '#00A3FF',
+  primaryLight: '#38BDF8',
+  primaryDark: '#0284C7',
+  accentNavy: '#0A1931',
+  accentCheck: '#00A3FF',
 
   // Status colors
-  present: '#22C55E',
+  present: '#10B981',
   absent: '#EF4444',
-  holiday: '#60A5FA',
+  holiday: '#38BDF8',
   cancelled: '#F59E0B',
-  shifted: '#EC4899',
+  shifted: '#00D2FF',
 
-  // Subject palette (neon)
+  // Subject palette (neon modern azure-cyan-violet balance)
   subjectColors: [
-    '#7C3AED', // violet
-    '#DB2777', // pink
-    '#0891B2', // cyan
-    '#059669', // emerald
-    '#D97706', // amber
-    '#DC2626', // red
-    '#7C3AED', // violet (repeat)
-    '#2563EB', // blue
-    '#9333EA', // purple
+    '#00A3FF', // electric cyan
+    '#2563EB', // royal blue
     '#0D9488', // teal
-    '#B45309', // yellow-brown
-    '#BE185D', // hot pink
+    '#10B981', // emerald
+    '#6366F1', // indigo
+    '#8B5CF6', // violet
+    '#0284C7', // sky blue
+    '#F59E0B', // amber
+    '#EC4899', // pink
+    '#14B8A6', // aqua
+    '#3B82F6', // dodger blue
+    '#EF4444', // coral red
   ],
 
-  // Gradients
-  gradientStart: '#7C3AED',
-  gradientEnd: '#DB2777',
+  // Gradients matching new Attendo Logo
+  gradientStart: '#00A3FF',
+  gradientEnd: '#2563EB',
 
   // Toast
-  toastBg: '#1C1C27',
+  toastBg: '#0F203D',
 
   // Chart
-  chartGrid: '#2A2A3D',
+  chartGrid: '#1E3B6E',
 
   // Heatmap
-  heatmapEmpty: '#13131A',
-  heatmapPresent: '#22C55E',
+  heatmapEmpty: '#0A152A',
+  heatmapPresent: '#10B981',
   heatmapAbsent: '#EF4444',
-  heatmapHoliday: '#60A5FA',
+  heatmapHoliday: '#38BDF8',
   heatmapCancelled: '#F59E0B',
-  heatmapNoClass: '#1C1C27',
+  heatmapNoClass: '#10203E',
 };
 
 export function getStatusColor(status: string | null): string {

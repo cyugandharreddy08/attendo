@@ -42,8 +42,8 @@ describe('PixelAssemblySplashScreen', () => {
           progressInfo={{
             status: 'downloading',
             percentage: 45,
-            message: 'Downloading update bundle v8.1.2...',
-            version: '8.1.2',
+            message: 'Downloading update bundle v8.1.3...',
+            version: '8.1.3',
           }}
         />,
       );
