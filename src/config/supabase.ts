@@ -18,4 +18,4 @@ export const GEMINI_MODEL = 'gemini-2.0-flash';
 
 // App version info
 export const APP_VERSION = '8.1.3';
-export const APP_VERSION_CODE = 812;
+export const APP_VERSION_CODE = 813;
