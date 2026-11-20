@@ -107,9 +107,12 @@ export default function AccountSyncScreen() {
     if (res.success) {
       triggerHaptic('notificationSuccess');
       await loadKeyAndStatus();
+      const currentActiveKey = await AccountSyncService.getOrGenerateSyncKey();
       Alert.alert(
         '🎉 Restore Successful!',
-        `Loaded ${res.subjectsCount} subjects & ${res.classesCount} attendance records from Security Code ${code}!`,
+        mode === 'merge'
+          ? `Successfully merged ${res.subjectsCount} subjects & ${res.classesCount} attendance records!\n\nYour active Account Security Code is: ${currentActiveKey} (retained as your active key).`
+          : `Loaded ${res.subjectsCount} subjects & ${res.classesCount} attendance records from Security Code ${code}!`,
         [{text: 'Awesome', onPress: () => navigation.goBack()}],
       );
     } else {

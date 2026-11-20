@@ -19,19 +19,19 @@ object OTAHealthMonitor {
     fun getAppVersion(context: Context): String {
         return try {
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            pInfo.versionName ?: "8.1.3"
+            pInfo.versionName ?: "8.1.4"
         } catch (e: Exception) {
-            "8.1.3"
+            "8.1.4"
         }
     }
 
     data class OTAState(
         var status: String = "EMBEDDED", // EMBEDDED, PENDING, ACTIVE, CONFIRMED, ROLLED_BACK
-        var activeVersion: String = "8.1.3",
+        var activeVersion: String = "8.1.4",
         var pendingVersion: String? = null,
         var bootFailureCount: Int = 0,
         var lastRollbackReason: String? = null,
-        var confirmedVersion: String = "8.1.3"
+        var confirmedVersion: String = "8.1.4"
     )
 
     private fun getStateFile(context: Context): File {

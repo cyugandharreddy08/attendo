@@ -43,7 +43,6 @@ import RescheduleBottomSheet from '../components/RescheduleBottomSheet';
 import UndoToast from '../components/UndoToast';
 import BunkSimulatorModal from '../components/BunkSimulatorModal';
 import AchievementsModal from '../components/AchievementsModal';
-import AttendoVectorLogo from '../components/AttendoVectorLogo';
 import {Colors, getStatusColor} from '../theme/colors';
 import {Spacing} from '../theme/spacing';
 import {Typography} from '../theme/typography';
@@ -363,11 +362,13 @@ export default function TimetableScreen() {
     <View style={styles.header}>
       <View style={styles.headerTop}>
         <TouchableOpacity
-          style={{flexDirection: 'row', alignItems: 'center', gap: 8}}
+          style={{flexDirection: 'row', alignItems: 'center', gap: 10}}
           onPress={() => openBulkSheetForDate(selectedDate)}>
-          <AttendoVectorLogo size={32} variant="floating" />
+          <View style={styles.headerShield}>
+            <Text style={styles.headerShieldText}>A</Text>
+          </View>
           <View>
-            <Text style={styles.brandTitle}>ATTENDO <Text style={styles.v3Badge}>v8.1.3</Text></Text>
+            <Text style={styles.brandTitle}>ATTENDO <Text style={styles.v3Badge}>v8.1.4</Text></Text>
             <Text style={styles.monthLabel}>{format(selectedDate, 'EEEE, MMMM d, yyyy')} ⚙️</Text>
           </View>
         </TouchableOpacity>
@@ -377,11 +378,11 @@ export default function TimetableScreen() {
             scaleTo={0.92}
             translateYOnPress={1.5}
             glowOnPress={true}
-            glowColor="#00A3FF"
+            glowColor="#8B5CF6"
             hapticType="impactMedium"
-            style={[styles.holidayBtn, {borderColor: '#00A3FF', backgroundColor: '#00A3FF22'}]}
+            style={[styles.holidayBtn, {borderColor: '#8B5CF6', backgroundColor: '#8B5CF625'}]}
             onPress={() => navigation.navigate('AIAssistant')}>
-            <Text style={[styles.holidayBtnText, {color: '#38BDF8', fontWeight: 'bold'}]}>✨ Ask Proxy</Text>
+            <Text style={[styles.holidayBtnText, {color: '#C4B5FD', fontWeight: 'bold'}]}>✨ Ask Proxy</Text>
           </AnimatedPressable>
           <AnimatedPressable
             physics="bouncy"
@@ -1084,5 +1085,25 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
     color: '#FFF',
+  },
+  headerShield: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: '#8B5CF6',
+    borderWidth: 1.5,
+    borderColor: '#06B6D4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#8B5CF6',
+    shadowOffset: {width: 0, height: 3},
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  headerShieldText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 18,
   },
 });

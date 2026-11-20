@@ -16,7 +16,6 @@ import {Colors} from '../theme/colors';
 import {Spacing} from '../theme/spacing';
 import {Typography} from '../theme/typography';
 import AnimatedPressable from '../components/AnimatedPressable';
-import AttendoVectorLogo from '../components/AttendoVectorLogo';
 import {sendChatMessageToProxy, ChatMessage} from '../services/GroqAIService';
 import {AIActionCardData} from '../services/AIToolRegistry';
 import {getActiveAIApiKey, setActiveAIApiKey, getActiveAIModel, setActiveAIModel, AI_MODELS} from '../config/aiConfig';
@@ -508,7 +507,7 @@ export default function AIAssistantScreen({navigation}: any) {
         </AnimatedPressable>
         <View style={styles.headerCenter}>
           <View style={styles.headerTitleRow}>
-            <AttendoVectorLogo size={24} variant="floating" style={{marginRight: 6}} />
+            <Text style={{fontSize: 20, marginRight: 6}}>🤖</Text>
             <Text style={styles.headerTitle}>Proxy AI</Text>
             <View style={styles.onlineDot} />
           </View>

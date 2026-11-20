@@ -237,8 +237,20 @@ export class AccountSyncService {
       const restoreRes = await CloudBackupService.applyRestoredPayload(payload, mode);
 
       if (restoreRes.success) {
-        // Link this device to this sync key
-        await this.setSyncKey(syncCode);
+        if (mode === 'replace') {
+          // Replace mode: This device adopts the imported security sync code
+          await this.setSyncKey(syncCode);
+        } else {
+          // Merge mode: Per requirement, the key should be the new one, not the old one!
+          let activeKey = await this.getOrGenerateSyncKey();
+          // If activeKey happens to match the old imported code, provision a brand new key
+          if (!activeKey || activeKey.toUpperCase() === syncCode.toUpperCase()) {
+            activeKey = generateSecurityCode();
+            await this.setSyncKey(activeKey);
+          }
+          // Immediately back up the merged dataset to the cloud vault under the new key
+          await this.backupToCloud(activeKey);
+        }
         await setSetting(SETTING_LAST_SYNC_TIME, new Date().toISOString());
       }
 

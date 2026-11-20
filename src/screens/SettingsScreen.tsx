@@ -26,7 +26,6 @@ import {AuthService} from '../services/AuthService';
 import {StudentProfile} from '../types';
 import AnimatedPressable from '../components/AnimatedPressable';
 import {AccountSyncService} from '../services/AccountSyncService';
-import AttendoVectorLogo from '../components/AttendoVectorLogo';
 
 const REMINDER_OPTIONS = [
   {label: '10 mins', value: 10},
@@ -169,10 +168,12 @@ export default function SettingsScreen() {
       style={[styles.container, {paddingTop: insets.top}]}
       contentContainerStyle={styles.content}>
       <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 16}}>
-        <AttendoVectorLogo size={46} variant="floating" style={{marginRight: 12}} />
+        <View style={styles.headerShieldBadge}>
+          <Text style={styles.headerShieldText}>A</Text>
+        </View>
         <View>
           <Text style={styles.pageTitle}>Settings</Text>
-          <Text style={{color: '#93C5FD', fontSize: 12, letterSpacing: 0.5}}>Official Attendo Brand & System Controls</Text>
+          <Text style={{color: '#C4B5FD', fontSize: 12, letterSpacing: 0.5}}>Classic 7.0.0 Shield Theme & System Controls</Text>
         </View>
       </View>
 
@@ -370,7 +371,7 @@ export default function SettingsScreen() {
       </SettingsSection>
 
       <SettingsSection title="About">
-        <SettingsRow label="App Version" description="8.1.3 (Official Brand Logo, Native Concept Intro & Clean Unshift)" />
+        <SettingsRow label="App Version" description="8.1.4 (Classic 7.0.0 Shield Logo & Animation Restoration, Data Merge Key Fix)" />
         <SettingsRow label="Cloud Backend" description="Supabase + Gemini 2.0 Flash AI" />
         <SettingsRow label="DB Engine" description="SQLite 3 + Continuous Postgres Sync" />
       </SettingsSection>
@@ -586,5 +587,26 @@ const styles = StyleSheet.create({
     color: '#E2E8F0',
     fontWeight: '600',
     fontSize: 12,
+  },
+  headerShieldBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#8B5CF6',
+    borderWidth: 2,
+    borderColor: '#06B6D4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    shadowColor: '#8B5CF6',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  headerShieldText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 22,
   },
 });
