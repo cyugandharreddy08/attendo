@@ -48,3 +48,6 @@ bundle-*.zip
 .buckd
 buck-out
 .metro-health-check*
+
+rust/target/
+

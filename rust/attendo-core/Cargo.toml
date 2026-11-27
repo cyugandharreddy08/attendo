@@ -1,0 +1,23 @@
+[package]
+name = "attendo-core"
+version = "9.0.0"
+edition = "2021"
+description = "High-performance Rust core engine for Attendo (SQLite WAL, Attendance Math, Bunk Predictor, Cloud Sync, Proxy AI)"
+
+[lib]
+name = "attendo_core"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+thiserror = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+rand = "0.8"
+ureq = { version = "2.10", features = ["json"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+android_logger = "0.14"
+log = "0.4"
