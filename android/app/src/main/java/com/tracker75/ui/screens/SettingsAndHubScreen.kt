@@ -3,8 +3,6 @@ package com.tracker75.ui.screens
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -39,7 +37,6 @@ fun SettingsAndHubScreen(
     val profile by vm.studentProfile.collectAsState()
     val searchResults by vm.studentSearchResults.collectAsState()
     val localBugs by vm.localBugs.collectAsState()
-    val updateInfo by vm.updateInfo.collectAsState()
     val isSyncing by vm.isSyncing.collectAsState()
     val context = LocalContext.current
 
@@ -65,7 +62,7 @@ fun SettingsAndHubScreen(
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text("Settings & Hub", color = CyberColors.TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Black)
-                    Text("Rust Core v9.0.0 • Obsidian Cyber-Grid", color = CyberColors.NeonCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("Rust Core v9.0.1 • Clean Obsidian UI", color = CyberColors.NeonCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -168,15 +165,15 @@ fun SettingsAndHubScreen(
             CyberBentoCard {
                 Text("SYSTEM & TOOLS", color = CyberColors.NeonCyan, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.2.sp)
                 Spacer(Modifier.height(8.dp))
-                SettingsItemRow("🔥 Streak, Heatmap & Reports", "View 365-day activity grid & export summary") { onOpenHeatmap() }
-                Divider(color = CyberColors.CyberBorder, modifier = Modifier.padding(vertical = 8.dp))
+                SettingsItemRow("📅 Monthly Calendar & Reports", "View spacious attendance calendar & export summary") { onOpenHeatmap() }
+                HorizontalDivider(color = CyberColors.CyberBorder, modifier = Modifier.padding(vertical = 8.dp))
                 SettingsItemRow("🔔 Schedule Daily Nudge", "8:30 PM attendance reminder via WorkManager") { vm.scheduleReminders(context) }
-                Divider(color = CyberColors.CyberBorder, modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(color = CyberColors.CyberBorder, modifier = Modifier.padding(vertical = 8.dp))
                 SettingsItemRow("🐛 Report a Bug (${localBugs.length()} logged)", "Send diagnostics to Attendo backend") { showBugDialog = true }
-                Divider(color = CyberColors.CyberBorder, modifier = Modifier.padding(vertical = 8.dp))
-                SettingsItemRow("📜 Changelog & Release Notes", "What's new in Attendo v9.0.0 Rust Edition") { showChangelogDialog = true }
-                Divider(color = CyberColors.CyberBorder, modifier = Modifier.padding(vertical = 8.dp))
-                SettingsItemRow("🚀 Check for App Updates", "Current: v9.0.0 (Build 900)") { vm.checkForUpdate() }
+                HorizontalDivider(color = CyberColors.CyberBorder, modifier = Modifier.padding(vertical = 8.dp))
+                SettingsItemRow("📜 Changelog & Release Notes", "What's new in Attendo v9.0.1") { showChangelogDialog = true }
+                HorizontalDivider(color = CyberColors.CyberBorder, modifier = Modifier.padding(vertical = 8.dp))
+                SettingsItemRow("🚀 Check for App Updates", "Current: v9.0.1 (Build 901)") { vm.checkForUpdate(silent = false) }
             }
         }
     }
@@ -318,14 +315,14 @@ fun SettingsAndHubScreen(
         AlertDialog(
             onDismissRequest = { showChangelogDialog = false },
             containerColor = CyberColors.GlassSurface,
-            title = { Text("Attendo v9.0.0 Changelog", color = CyberColors.TextPrimary, fontWeight = FontWeight.Bold) },
+            title = { Text("Attendo v9.0.1 Changelog", color = CyberColors.TextPrimary, fontWeight = FontWeight.Bold) },
             text = {
                 Text(
-                    "• Complete Rust Native Engine (attendo-core) with LTO & SQLite WAL + 256MB mmap\n" +
-                    "• 100% Native Jetpack Compose UI (zero JS bridge overhead)\n" +
-                    "• New Obsidian Glass & Neon Cyber-Grid UI with spring physics\n" +
-                    "• Classic 7.0.0 Shield 'A' logo preserved with new dual-ring intro\n" +
-                    "• Full feature parity: Timetable, Shift/Unshift, Bunk Simulator, Heatmap, Badges, Todos, Proxy AI, Cloud Sync (merge keeps new key) & Campus Directory",
+                    "• Clean plain dark Obsidian background (removed square grid)\n" +
+                    "• Refined health-colored percentage gauges (Emerald / Amber / Crimson)\n" +
+                    "• Spacious Monthly Attendance Calendar replacing the tiny heatmap\n" +
+                    "• In-App APK Auto-Updater with live progress bar & 1-tap install\n" +
+                    "• Powered by Rust Native Core (attendo-core) + Jetpack Compose",
                     color = CyberColors.TextSecondary,
                     fontSize = 12.sp,
                     lineHeight = 18.sp
@@ -333,23 +330,6 @@ fun SettingsAndHubScreen(
             },
             confirmButton = { TextButton(onClick = { showChangelogDialog = false }) { Text("Awesome", color = CyberColors.NeonCyan) } }
         )
-    }
-
-    updateInfo?.let { info ->
-        if (info.optBoolean("hasUpdate", false)) {
-            AlertDialog(
-                onDismissRequest = {},
-                containerColor = CyberColors.GlassSurface,
-                title = { Text("Update Available: v${info.optString("latestVersion")}", color = CyberColors.NeonCyan, fontWeight = FontWeight.Bold) },
-                text = { Text(info.optString("releaseNotes"), color = CyberColors.TextSecondary, fontSize = 12.sp) },
-                confirmButton = {
-                    Button(onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(info.optString("apkUrl")))
-                        context.startActivity(intent)
-                    }) { Text("Download APK") }
-                }
-            )
-        }
     }
 }
 

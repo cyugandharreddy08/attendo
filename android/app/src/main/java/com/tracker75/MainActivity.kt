@@ -13,6 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -35,7 +37,7 @@ import kotlinx.coroutines.delay
 
 enum class CyberTab(val label: String, val icon: ImageVector) {
     Timetable("Schedule", Icons.Rounded.CalendarToday),
-    Subjects("Subjects", Icons.Rounded.MenuBook),
+    Subjects("Subjects", Icons.AutoMirrored.Rounded.MenuBook),
     ProxyAI("Proxy AI", Icons.Rounded.AutoAwesome),
     Tasks("Tasks", Icons.Rounded.CheckCircleOutline),
     Hub("Hub", Icons.Rounded.Tune)
@@ -62,6 +64,9 @@ private fun AttendoRoot(vm: AttendoViewModel = viewModel()) {
     var activeTab by remember { mutableStateOf(CyberTab.Timetable) }
     var showHeatmapOverlay by remember { mutableStateOf(false) }
     val banner by vm.bannerMessage.collectAsState()
+    val updateInfo by vm.updateInfo.collectAsState()
+    val downloadProgress by vm.downloadProgress.collectAsState()
+    val context = LocalContext.current
 
     LaunchedEffect(banner) {
         if (banner != null) {
@@ -134,6 +139,57 @@ private fun AttendoRoot(vm: AttendoViewModel = viewModel()) {
                     .padding(horizontal = 16.dp, vertical = 10.dp)
             ) {
                 Text(banner ?: "", color = CyberColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        // Global In-App Auto-Updater Dialog
+        updateInfo?.let { info ->
+            if (info.optBoolean("hasUpdate", false)) {
+                AlertDialog(
+                    onDismissRequest = { if (downloadProgress == null) vm.dismissUpdate() },
+                    containerColor = CyberColors.GlassSurface,
+                    title = {
+                        Text(
+                            "Update Ready: v${info.optString("latestVersion")}",
+                            color = CyberColors.NeonCyan,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(
+                                info.optString("releaseNotes", "A new Attendo update is available."),
+                                color = CyberColors.TextSecondary,
+                                fontSize = 12.sp
+                            )
+                            downloadProgress?.let { pct ->
+                                Text("Downloading APK: $pct%", color = CyberColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                LinearProgressIndicator(
+                                    progress = { pct / 100f },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = CyberColors.ElectricViolet,
+                                    trackColor = CyberColors.ObsidianBg
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = { vm.startInAppUpdate(context, info.optString("apkUrl")) },
+                            enabled = downloadProgress == null,
+                            colors = ButtonDefaults.buttonColors(containerColor = CyberColors.ElectricViolet)
+                        ) {
+                            Text(if (downloadProgress != null) "Downloading..." else "Install Update")
+                        }
+                    },
+                    dismissButton = {
+                        if (downloadProgress == null) {
+                            TextButton(onClick = { vm.dismissUpdate() }) {
+                                Text("Later", color = CyberColors.TextSecondary)
+                            }
+                        }
+                    }
+                )
             }
         }
     }

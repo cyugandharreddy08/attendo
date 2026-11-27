@@ -17,7 +17,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -34,7 +33,7 @@ import androidx.compose.ui.unit.sp
 import com.tracker75.ui.theme.CyberColors
 
 /**
- * Classic 7.0.0 3D Shield Emblem ('A') preserved across the Obsidian Cyber-Grid UI.
+ * Classic 7.0.0 3D Shield Emblem ('A') preserved cleanly.
  */
 @Composable
 fun ClassicShieldLogo(
@@ -65,7 +64,7 @@ fun ClassicShieldLogo(
 }
 
 /**
- * Obsidian Glass Bento Card with spring press physics & subtle cyber border.
+ * Clean Obsidian Glass Bento Card with smooth spring press physics.
  */
 @Composable
 fun CyberBentoCard(
@@ -80,8 +79,8 @@ fun CyberBentoCard(
     val pressed by interaction.collectIsPressedAsState()
 
     val scale by animateFloatAsState(
-        targetValue = if (pressed && onClick != null) 0.97f else 1f,
-        animationSpec = spring(dampingRatio = 0.65f, stiffness = 450f),
+        targetValue = if (pressed && onClick != null) 0.975f else 1f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = 420f),
         label = "bentoScale"
     )
 
@@ -105,17 +104,21 @@ fun CyberBentoCard(
         shape = RoundedCornerShape(20.dp),
         color = CyberColors.GlassCard,
         border = BorderStroke(1.dp, borderColor),
-        shadowElevation = if (glowColor != Color.Transparent) 8.dp else 0.dp
+        shadowElevation = if (glowColor != Color.Transparent) 6.dp else 0.dp
     ) {
         Column(
             modifier = Modifier
                 .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            glowColor.copy(alpha = 0.08f),
-                            CyberColors.GlassCard
+                    if (glowColor != Color.Transparent) {
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                glowColor.copy(alpha = 0.06f),
+                                CyberColors.GlassCard
+                            )
                         )
-                    )
+                    } else {
+                        Brush.verticalGradient(listOf(CyberColors.GlassCard, CyberColors.GlassCard))
+                    }
                 )
                 .padding(16.dp),
             content = content
@@ -124,23 +127,23 @@ fun CyberBentoCard(
 }
 
 /**
- * Animated Neon Cyber Gauge for attendance percentage.
+ * Clean, high-contrast Attendance Ring Gauge with health-based color (Emerald / Amber / Crimson).
  */
 @Composable
 fun CyberAttendanceGauge(
     percent: Int,
     targetPercent: Int = 75,
-    size: Dp = 112.dp,
-    strokeWidth: Dp = 10.dp
+    size: Dp = 108.dp,
+    strokeWidth: Dp = 9.dp
 ) {
     val animatedSweep by animateFloatAsState(
         targetValue = (percent.coerceIn(0, 100) / 100f) * 360f,
-        animationSpec = spring(dampingRatio = 0.75f, stiffness = 120f),
+        animationSpec = spring(dampingRatio = 0.78f, stiffness = 130f),
         label = "gaugeSweep"
     )
 
     val ringColor = when {
-        percent >= targetPercent -> CyberColors.NeonCyan
+        percent >= targetPercent -> CyberColors.Present
         percent >= targetPercent - 10 -> CyberColors.Cancelled
         else -> CyberColors.Absent
     }
@@ -151,9 +154,9 @@ fun CyberAttendanceGauge(
             val arcSize = Size(this.size.width - strokePx, this.size.height - strokePx)
             val topLeft = Offset(strokePx / 2f, strokePx / 2f)
 
-            // Track
+            // Subtle dark track
             drawArc(
-                color = CyberColors.CyberBorder.copy(alpha = 0.6f),
+                color = Color(0xFF1A1A28),
                 startAngle = 0f,
                 sweepAngle = 360f,
                 useCenter = false,
@@ -162,16 +165,9 @@ fun CyberAttendanceGauge(
                 style = Stroke(width = strokePx, cap = StrokeCap.Round)
             )
 
-            // Active Neon Gradient Arc
+            // Clean solid health-colored arc
             drawArc(
-                brush = Brush.sweepGradient(
-                    colors = listOf(
-                        CyberColors.ElectricViolet,
-                        ringColor,
-                        CyberColors.NeonCyan,
-                        CyberColors.ElectricViolet
-                    )
-                ),
+                color = ringColor,
                 startAngle = -90f,
                 sweepAngle = animatedSweep,
                 useCenter = false,
@@ -184,12 +180,12 @@ fun CyberAttendanceGauge(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = "$percent%",
-                color = CyberColors.TextPrimary,
-                fontSize = 24.sp,
+                color = ringColor,
+                fontSize = 23.sp,
                 fontWeight = FontWeight.Black
             )
             Text(
-                text = "TARGET $targetPercent%",
+                text = "GOAL $targetPercent%",
                 color = CyberColors.TextMuted,
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
@@ -200,31 +196,17 @@ fun CyberAttendanceGauge(
 }
 
 /**
- * Subtle Cyber-Grid background painter for screens.
+ * Clean plain Obsidian background (no square grid lines).
  */
-fun Modifier.cyberGridBackground(): Modifier = this.drawBehind {
-    drawRect(CyberColors.ObsidianBg)
-    val step = 36.dp.toPx()
-    val lineColor = Color(0xFF141428)
-    var x = 0f
-    while (x < size.width) {
-        drawLine(lineColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
-        x += step
-    }
-    var y = 0f
-    while (y < size.height) {
-        drawLine(lineColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
-        y += step
-    }
-}
+fun Modifier.cyberGridBackground(): Modifier = this.background(CyberColors.ObsidianBg)
 
 @Composable
 fun StatusPill(label: String, color: Color) {
     Box(
         modifier = Modifier
             .clip(CircleShape)
-            .background(color.copy(alpha = 0.16f))
-            .border(1.dp, color.copy(alpha = 0.5f), CircleShape)
+            .background(color.copy(alpha = 0.14f))
+            .border(1.dp, color.copy(alpha = 0.45f), CircleShape)
             .padding(horizontal = 10.dp, vertical = 4.dp)
     ) {
         Text(

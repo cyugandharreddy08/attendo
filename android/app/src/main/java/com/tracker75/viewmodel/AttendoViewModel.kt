@@ -3,6 +3,7 @@ package com.tracker75.viewmodel
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tracker75.core.AppUpdater
 import com.tracker75.core.AttendoCore
 import com.tracker75.core.NotificationHelper
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -61,6 +62,9 @@ class AttendoViewModel : ViewModel() {
     private val _updateInfo = MutableStateFlow<JSONObject?>(null)
     val updateInfo: StateFlow<JSONObject?> = _updateInfo.asStateFlow()
 
+    private val _downloadProgress = MutableStateFlow<Int?>(null)
+    val downloadProgress: StateFlow<Int?> = _downloadProgress.asStateFlow()
+
     private val _bannerMessage = MutableStateFlow<String?>(null)
     val bannerMessage: StateFlow<String?> = _bannerMessage.asStateFlow()
 
@@ -69,6 +73,7 @@ class AttendoViewModel : ViewModel() {
 
     init {
         refreshAll()
+        checkForUpdate(silent = true)
     }
 
     fun clearBanner() {
@@ -439,15 +444,37 @@ class AttendoViewModel : ViewModel() {
         }
     }
 
-    fun checkForUpdate() {
+    fun checkForUpdate(silent: Boolean = false) {
         viewModelScope.launch {
-            AttendoCore.invoke("check_github_update", JSONObject().put("version_code", 900)).onSuccess {
-                _updateInfo.value = it
-                if (!it.optBoolean("hasUpdate", false)) {
-                    showBanner("You are on the latest version (v9.0.0)!")
+            AttendoCore.invoke("check_github_update", JSONObject().put("version_code", 901)).onSuccess {
+                if (it.optBoolean("hasUpdate", false)) {
+                    _updateInfo.value = it
+                } else if (!silent) {
+                    showBanner("You are on the latest version (v9.0.1)!")
                 }
             }.onFailure {
-                showBanner("Could not reach GitHub Releases")
+                if (!silent) showBanner("Could not reach GitHub Releases")
+            }
+        }
+    }
+
+    fun dismissUpdate() {
+        _updateInfo.value = null
+        _downloadProgress.value = null
+    }
+
+    fun startInAppUpdate(context: Context, apkUrl: String) {
+        if (_downloadProgress.value != null) return
+        _downloadProgress.value = 0
+        viewModelScope.launch {
+            AppUpdater.downloadAndInstall(context, apkUrl) { pct ->
+                _downloadProgress.value = pct
+            }.onSuccess {
+                _downloadProgress.value = null
+                _updateInfo.value = null
+            }.onFailure { err ->
+                _downloadProgress.value = null
+                showBanner("Update download failed: ${err.message}")
             }
         }
     }
