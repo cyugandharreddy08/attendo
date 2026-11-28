@@ -515,11 +515,11 @@ class AttendoViewModel : ViewModel() {
 
     fun checkForUpdate(silent: Boolean = false) {
         viewModelScope.launch {
-            AttendoCore.invoke("check_github_update", JSONObject().put("version_code", 910)).onSuccess {
+            AttendoCore.invoke("check_github_update", JSONObject().put("version_code", 920)).onSuccess {
                 if (it.optBoolean("hasUpdate", false)) {
                     _updateInfo.value = it
                 } else if (!silent) {
-                    showBanner("You are on the latest version (v9.1.0)!")
+                    showBanner("You are on the latest version (v9.2.0)!")
                 }
             }.onFailure {
                 if (!silent) showBanner("Could not reach GitHub Releases")

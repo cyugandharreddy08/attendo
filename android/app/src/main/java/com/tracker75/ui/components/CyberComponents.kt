@@ -33,30 +33,26 @@ import androidx.compose.ui.unit.sp
 import com.tracker75.ui.theme.CyberColors
 
 /**
- * Classic 7.0.0 3D Shield Emblem ('A') preserved cleanly.
+ * Classic 7.0.0 Shield Emblem ('A') styled with Material 3 Expressive primary-container.
  */
 @Composable
 fun ClassicShieldLogo(
-    size: Dp = 40.dp,
+    size: Dp = 38.dp,
     cornerRadius: Dp = 12.dp,
-    fontSize: Int = 20,
+    fontSize: Int = 19,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
             .size(size)
             .clip(RoundedCornerShape(cornerRadius))
-            .background(
-                Brush.linearGradient(
-                    colors = listOf(CyberColors.ElectricViolet, CyberColors.VioletDeep)
-                )
-            )
-            .border(1.8.dp, CyberColors.NeonCyan, RoundedCornerShape(cornerRadius)),
+            .background(CyberColors.ElectricViolet)
+            .border(1.5.dp, CyberColors.Primary.copy(alpha = 0.6f), RoundedCornerShape(cornerRadius)),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = "A",
-            color = Color.White,
+            color = CyberColors.OnPrimaryContainer,
             fontSize = fontSize.sp,
             fontWeight = FontWeight.Black
         )
@@ -64,7 +60,7 @@ fun ClassicShieldLogo(
 }
 
 /**
- * Clean Obsidian Glass Bento Card with smooth spring press physics.
+ * Material 3 Expressive Elevated Card (surface-container-low #11141D + outline-variant #232838).
  */
 @Composable
 fun CyberBentoCard(
@@ -79,9 +75,9 @@ fun CyberBentoCard(
     val pressed by interaction.collectIsPressedAsState()
 
     val scale by animateFloatAsState(
-        targetValue = if (pressed && onClick != null) 0.975f else 1f,
-        animationSpec = spring(dampingRatio = 0.7f, stiffness = 420f),
-        label = "bentoScale"
+        targetValue = if (pressed && onClick != null) 0.98f else 1f,
+        animationSpec = tween(durationMillis = 120),
+        label = "cardScale"
     )
 
     Surface(
@@ -103,42 +99,28 @@ fun CyberBentoCard(
             ),
         shape = RoundedCornerShape(20.dp),
         color = CyberColors.GlassCard,
-        border = BorderStroke(1.dp, borderColor),
-        shadowElevation = if (glowColor != Color.Transparent) 6.dp else 0.dp
+        border = BorderStroke(1.dp, borderColor)
     ) {
         Column(
-            modifier = Modifier
-                .background(
-                    if (glowColor != Color.Transparent) {
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                glowColor.copy(alpha = 0.06f),
-                                CyberColors.GlassCard
-                            )
-                        )
-                    } else {
-                        Brush.verticalGradient(listOf(CyberColors.GlassCard, CyberColors.GlassCard))
-                    }
-                )
-                .padding(16.dp),
+            modifier = Modifier.padding(16.dp),
             content = content
         )
     }
 }
 
 /**
- * Clean, high-contrast Attendance Ring Gauge with health-based color (Emerald / Amber / Crimson).
+ * Circular SVG-style Weighted Attendance Gauge matching the Material 3 Expressive HTML spec.
  */
 @Composable
 fun CyberAttendanceGauge(
     percent: Int,
     targetPercent: Int = 75,
-    size: Dp = 108.dp,
-    strokeWidth: Dp = 9.dp
+    size: Dp = 96.dp,
+    strokeWidth: Dp = 8.dp
 ) {
     val animatedSweep by animateFloatAsState(
         targetValue = (percent.coerceIn(0, 100) / 100f) * 360f,
-        animationSpec = spring(dampingRatio = 0.78f, stiffness = 130f),
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 140f),
         label = "gaugeSweep"
     )
 
@@ -147,6 +129,8 @@ fun CyberAttendanceGauge(
         percent >= targetPercent - 10 -> CyberColors.Cancelled
         else -> CyberColors.Absent
     }
+    val delta = percent - targetPercent
+    val deltaText = if (delta >= 0) "+$delta%" else "$delta%"
 
     Box(modifier = Modifier.size(size), contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -154,9 +138,8 @@ fun CyberAttendanceGauge(
             val arcSize = Size(this.size.width - strokePx, this.size.height - strokePx)
             val topLeft = Offset(strokePx / 2f, strokePx / 2f)
 
-            // Subtle dark track
             drawArc(
-                color = Color(0xFF1A1A28),
+                color = CyberColors.SurfaceHighest,
                 startAngle = 0f,
                 sweepAngle = 360f,
                 useCenter = false,
@@ -165,7 +148,6 @@ fun CyberAttendanceGauge(
                 style = Stroke(width = strokePx, cap = StrokeCap.Round)
             )
 
-            // Clean solid health-colored arc
             drawArc(
                 color = ringColor,
                 startAngle = -90f,
@@ -181,40 +163,82 @@ fun CyberAttendanceGauge(
             Text(
                 text = "$percent%",
                 color = ringColor,
-                fontSize = 23.sp,
-                fontWeight = FontWeight.Black
+                fontSize = 21.sp,
+                fontWeight = FontWeight.Bold
             )
             Text(
-                text = "GOAL $targetPercent%",
-                color = CyberColors.TextMuted,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.8.sp
+                text = deltaText,
+                color = CyberColors.TextSecondary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold
             )
         }
     }
 }
 
 /**
- * Clean plain Obsidian background (no square grid lines).
+ * Horizontal progress bar with vertical 75% target marker line matching the HTML spec.
  */
+@Composable
+fun TargetProgressBar(
+    percent: Int,
+    targetPercent: Int = 75,
+    modifier: Modifier = Modifier
+) {
+    val barColor = when {
+        percent >= targetPercent -> CyberColors.Present
+        percent >= targetPercent - 10 -> CyberColors.Cancelled
+        else -> CyberColors.Absent
+    }
+    val fillFraction = (percent.coerceIn(0, 100) / 100f)
+    val targetFraction = (targetPercent.coerceIn(1, 99) / 100f)
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(6.dp)
+            .clip(CircleShape)
+            .background(CyberColors.SurfaceHighest)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(fillFraction)
+                .fillMaxHeight()
+                .clip(CircleShape)
+                .background(barColor)
+        )
+        // 75% Target Marker Tick
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(targetFraction)
+                .fillMaxHeight(),
+            contentAlignment = Alignment.CenterEnd
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(2.dp)
+                    .fillMaxHeight()
+                    .background(CyberColors.TextPrimary.copy(alpha = 0.75f))
+            )
+        }
+    }
+}
+
 fun Modifier.cyberGridBackground(): Modifier = this.background(CyberColors.ObsidianBg)
 
 @Composable
-fun StatusPill(label: String, color: Color) {
+fun StatusPill(label: String, color: Color, containerColor: Color = color.copy(alpha = 0.16f)) {
     Box(
         modifier = Modifier
             .clip(CircleShape)
-            .background(color.copy(alpha = 0.14f))
-            .border(1.dp, color.copy(alpha = 0.45f), CircleShape)
+            .background(containerColor)
             .padding(horizontal = 10.dp, vertical = 4.dp)
     ) {
         Text(
-            text = label.uppercase(),
+            text = label,
             color = color,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.ExtraBold,
-            letterSpacing = 0.8.sp
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold
         )
     }
 }

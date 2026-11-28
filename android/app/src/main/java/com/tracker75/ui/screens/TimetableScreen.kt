@@ -94,7 +94,7 @@ fun TimetableScreen(
                                 letterSpacing = 1.5.sp
                             )
                             Spacer(Modifier.width(8.dp))
-                            StatusPill("v9.1.0", CyberColors.NeonCyan)
+                            StatusPill("v9.2.0", CyberColors.Primary)
                         }
                         Text(
                             "Tap shield for Bulk Mark • $selectedDate",

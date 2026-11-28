@@ -47,8 +47,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(AndroidColor.parseColor("#05050A")),
-            navigationBarStyle = SystemBarStyle.dark(AndroidColor.parseColor("#05050A"))
+            statusBarStyle = SystemBarStyle.dark(AndroidColor.parseColor("#090B10")),
+            navigationBarStyle = SystemBarStyle.dark(AndroidColor.parseColor("#06070B"))
         )
         setContent {
             AttendoTheme {
@@ -111,13 +111,11 @@ private fun AttendoRoot(vm: AttendoViewModel = viewModel()) {
                     }
                 }
 
-                // Floating Obsidian Glass Cyber Dock
+                // Material 3 Expressive Bottom Navigation Bar (matching HTML spec)
                 FloatingCyberDock(
                     activeTab = activeTab,
                     onSelect = { activeTab = it },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                    modifier = Modifier.align(Alignment.BottomCenter)
                 )
             }
         }
@@ -202,43 +200,53 @@ private fun FloatingCyberDock(
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
-    Row(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(CyberColors.GlassCard.copy(alpha = 0.96f))
-            .border(1.dp, CyberColors.ElectricViolet.copy(alpha = 0.4f), RoundedCornerShape(22.dp))
-            .padding(horizontal = 6.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
+            .background(CyberColors.SurfaceDim.copy(alpha = 0.96f))
     ) {
-        CyberTab.entries.forEach { tab ->
-            val selected = tab == activeTab
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(if (selected) CyberColors.ElectricViolet.copy(alpha = 0.22f) else Color.Transparent)
-                    .clickable {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onSelect(tab)
+        HorizontalDivider(color = CyberColors.CyberBorder, thickness = 1.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CyberTab.entries.forEach { tab ->
+                val selected = tab == activeTab
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onSelect(tab)
+                        }
+                        .padding(vertical = 4.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(if (selected) CyberColors.ElectricViolet.copy(alpha = 0.30f) else Color.Transparent)
+                            .padding(horizontal = 14.dp, vertical = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = tab.icon,
+                            contentDescription = tab.label,
+                            tint = if (selected) CyberColors.Primary else CyberColors.TextSecondary,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
-                    .padding(vertical = 6.dp)
-            ) {
-                Icon(
-                    imageVector = tab.icon,
-                    contentDescription = tab.label,
-                    tint = if (selected) CyberColors.NeonCyan else CyberColors.TextMuted,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = tab.label,
-                    color = if (selected) CyberColors.TextPrimary else CyberColors.TextMuted,
-                    fontSize = 10.sp,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                )
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        text = tab.label,
+                        color = if (selected) CyberColors.Primary else CyberColors.TextSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
+                    )
+                }
             }
         }
     }

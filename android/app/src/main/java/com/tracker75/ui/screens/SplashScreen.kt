@@ -193,7 +193,7 @@ fun CyberSplashScreen(onFinished: () -> Unit) {
                         letterSpacing = 1.2.sp
                     )
                     Text(
-                        text = "v9.1.0",
+                        text = "v9.2.0",
                         color = CyberColors.NeonCyan,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
