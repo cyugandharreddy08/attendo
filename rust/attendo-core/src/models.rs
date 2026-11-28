@@ -322,11 +322,36 @@ pub struct ChatMessage {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DeletedAuditRecord {
+    pub id: i64,
+    pub entity_type: String,
+    pub entity_id: i64,
+    pub label: String,
+    pub deleted_at: String,
+    pub restored: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreResult {
+    pub audit_id: i64,
+    pub entity_type: String,
+    pub label: String,
+    pub restored_items: usize,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateCheckResult {
     pub has_update: bool,
     pub latest_version: String,
     pub latest_code: i32,
     pub apk_url: String,
+    #[serde(default)]
+    pub patch_url: Option<String>,
+    #[serde(default)]
+    pub patch_size_bytes: Option<u64>,
     pub release_notes: String,
     pub is_mandatory: bool,
 }

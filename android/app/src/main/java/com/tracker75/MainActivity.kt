@@ -7,9 +7,12 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -20,25 +23,27 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.tracker75.ui.components.AuroraBackdrop
+import com.tracker75.ui.components.GlassCard
+import com.tracker75.ui.components.physicsPressable
 import com.tracker75.ui.screens.*
+import com.tracker75.ui.theme.AttendoColors
 import com.tracker75.ui.theme.AttendoTheme
-import com.tracker75.ui.theme.CyberColors
 import com.tracker75.viewmodel.AttendoViewModel
 import kotlinx.coroutines.delay
 
-enum class CyberTab(val label: String, val icon: ImageVector) {
+enum class AttendoTab(val label: String, val icon: ImageVector) {
     Timetable("Schedule", Icons.Rounded.CalendarToday),
     Subjects("Subjects", Icons.AutoMirrored.Rounded.MenuBook),
-    ProxyAI("Proxy AI", Icons.Rounded.AutoAwesome),
+    ProxyAI("Copilot", Icons.Rounded.AutoAwesome),
     Tasks("Tasks", Icons.Rounded.CheckCircleOutline),
     Hub("Hub", Icons.Rounded.Tune)
 }
@@ -47,8 +52,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(AndroidColor.parseColor("#090B10")),
-            navigationBarStyle = SystemBarStyle.dark(AndroidColor.parseColor("#06070B"))
+            statusBarStyle = SystemBarStyle.dark(AndroidColor.parseColor("#07090F")),
+            navigationBarStyle = SystemBarStyle.dark(AndroidColor.parseColor("#07090F"))
         )
         setContent {
             AttendoTheme {
@@ -61,8 +66,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AttendoRoot(vm: AttendoViewModel = viewModel()) {
     var showSplash by remember { mutableStateOf(true) }
-    var activeTab by remember { mutableStateOf(CyberTab.Timetable) }
-    var showHeatmapOverlay by remember { mutableStateOf(false) }
+    var activeTab by remember { mutableStateOf(AttendoTab.Timetable) }
+    var showCalendarOverlay by remember { mutableStateOf(false) }
     val banner by vm.bannerMessage.collectAsState()
     val updateInfo by vm.updateInfo.collectAsState()
     val downloadProgress by vm.downloadProgress.collectAsState()
@@ -78,112 +83,148 @@ private fun AttendoRoot(vm: AttendoViewModel = viewModel()) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(CyberColors.ObsidianBg)
-            .windowInsetsPadding(WindowInsets.systemBars)
+            .background(AttendoColors.ObsidianCanvas)
     ) {
-        if (showSplash) {
-            CyberSplashScreen(onFinished = { showSplash = false })
-        } else if (showHeatmapOverlay) {
-            CalendarHeatmapScreen(
-                vm = vm,
-                onBack = { showHeatmapOverlay = false }
-            )
-        } else {
-            Box(modifier = Modifier.fillMaxSize()) {
-                AnimatedContent(
-                    targetState = activeTab,
-                    transitionSpec = { fadeIn() togetherWith fadeOut() },
-                    label = "tabTransition"
-                ) { tab ->
-                    when (tab) {
-                        CyberTab.Timetable -> TimetableScreen(
-                            vm = vm,
-                            onOpenProxyAI = { activeTab = CyberTab.ProxyAI },
-                            onOpenHeatmap = { showHeatmapOverlay = true }
+        AuroraBackdrop()
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.systemBars)
+        ) {
+            if (showSplash) {
+                CyberSplashScreen(onFinished = { showSplash = false })
+            } else if (showCalendarOverlay) {
+                CalendarHeatmapScreen(
+                    vm = vm,
+                    onBack = { showCalendarOverlay = false }
+                )
+            } else {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    AnimatedContent(
+                        targetState = activeTab,
+                        transitionSpec = {
+                            (fadeIn(tween(220)) + scaleIn(
+                                initialScale = 0.97f,
+                                animationSpec = spring(dampingRatio = 0.84f, stiffness = 360f)
+                            )) togetherWith fadeOut(tween(140))
+                        },
+                        label = "tabTransition"
+                    ) { tab ->
+                        when (tab) {
+                            AttendoTab.Timetable -> TimetableScreen(
+                                vm = vm,
+                                onOpenCalendar = { showCalendarOverlay = true }
+                            )
+                            AttendoTab.Subjects -> SubjectsScreen(
+                                vm = vm,
+                                onOpenVault = { activeTab = AttendoTab.Hub }
+                            )
+                            AttendoTab.ProxyAI -> ProxyAIScreen(vm = vm)
+                            AttendoTab.Tasks -> TodoScreen(vm = vm)
+                            AttendoTab.Hub -> SettingsAndHubScreen(vm = vm)
+                        }
+                    }
+
+                    FloatingGlassDock(
+                        activeTab = activeTab,
+                        onSelect = { activeTab = it },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                    )
+                }
+            }
+
+            // Floating Glass Toast Banner
+            AnimatedVisibility(
+                visible = banner != null,
+                enter = slideInVertically { -it } + fadeIn(),
+                exit = slideOutVertically { -it } + fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+                GlassCard(
+                    cornerRadius = 18.dp,
+                    accentColor = AttendoColors.Cyan,
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Rounded.Bolt,
+                            contentDescription = null,
+                            tint = AttendoColors.Cyan,
+                            modifier = Modifier.size(18.dp)
                         )
-                        CyberTab.Subjects -> SubjectsScreen(vm = vm)
-                        CyberTab.ProxyAI -> ProxyAIScreen(vm = vm)
-                        CyberTab.Tasks -> TodoScreen(vm = vm)
-                        CyberTab.Hub -> SettingsAndHubScreen(
-                            vm = vm,
-                            onOpenHeatmap = { showHeatmapOverlay = true }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = banner ?: "",
+                            color = AttendoColors.TextPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
-
-                // Material 3 Expressive Bottom Navigation Bar (matching HTML spec)
-                FloatingCyberDock(
-                    activeTab = activeTab,
-                    onSelect = { activeTab = it },
-                    modifier = Modifier.align(Alignment.BottomCenter)
-                )
             }
-        }
 
-        // Floating Notification Banner
-        AnimatedVisibility(
-            visible = banner != null,
-            enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(CyberColors.GlassElevated)
-                    .border(1.dp, CyberColors.NeonCyan.copy(alpha = 0.7f), RoundedCornerShape(14.dp))
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
-            ) {
-                Text(banner ?: "", color = CyberColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            }
-        }
+            // OTA Update Dialog
+            updateInfo?.let { info ->
+                val ver = info.optString("latestVersion", "")
+                val notes = info.optString("releaseNotes", "")
+                val url = info.optString("apkUrl", "")
+                val patchUrl = info.optString("patchUrl", "").takeIf { it.isNotBlank() }
+                val patchSize = info.optLong("patchSizeBytes", 0L)
+                val sizeLabel = if (patchUrl != null && patchSize > 0) {
+                    val mb = patchSize / (1024.0 * 1024.0)
+                    String.format("Delta Update (%.1f MB)", mb)
+                } else {
+                    "Update Now"
+                }
 
-        // Global In-App Auto-Updater Dialog
-        updateInfo?.let { info ->
-            if (info.optBoolean("hasUpdate", false)) {
                 AlertDialog(
                     onDismissRequest = { if (downloadProgress == null) vm.dismissUpdate() },
-                    containerColor = CyberColors.GlassSurface,
+                    containerColor = AttendoColors.ElevatedSurface,
                     title = {
                         Text(
-                            "Update Ready: v${info.optString("latestVersion")}",
-                            color = CyberColors.NeonCyan,
+                            "Attendo v$ver Available",
+                            color = AttendoColors.TextPrimary,
                             fontWeight = FontWeight.Bold
                         )
                     },
                     text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(
-                                info.optString("releaseNotes", "A new Attendo update is available."),
-                                color = CyberColors.TextSecondary,
-                                fontSize = 12.sp
-                            )
-                            downloadProgress?.let { pct ->
-                                Text("Downloading APK: $pct%", color = CyberColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Column {
+                            Text(notes, color = AttendoColors.TextSecondary, fontSize = 13.sp)
+                            if (downloadProgress != null) {
+                                Spacer(modifier = Modifier.height(14.dp))
                                 LinearProgressIndicator(
-                                    progress = { pct / 100f },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    color = CyberColors.ElectricViolet,
-                                    trackColor = CyberColors.ObsidianBg
+                                    progress = { (downloadProgress ?: 0) / 100f },
+                                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)),
+                                    color = AttendoColors.Cyan,
+                                    trackColor = Color(0x22FFFFFF)
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    "Patching & installing: ${downloadProgress}%",
+                                    color = AttendoColors.Cyan,
+                                    fontSize = 12.sp
                                 )
                             }
                         }
                     },
                     confirmButton = {
                         Button(
-                            onClick = { vm.startInAppUpdate(context, info.optString("apkUrl")) },
-                            enabled = downloadProgress == null,
-                            colors = ButtonDefaults.buttonColors(containerColor = CyberColors.ElectricViolet)
+                            onClick = { vm.startInAppUpdate(context, url, patchUrl) },
+                            enabled = downloadProgress == null && url.isNotBlank(),
+                            colors = ButtonDefaults.buttonColors(containerColor = AttendoColors.Indigo)
                         ) {
-                            Text(if (downloadProgress != null) "Downloading..." else "Install Update")
+                            Text(if (downloadProgress != null) "Updating..." else sizeLabel)
                         }
                     },
                     dismissButton = {
                         if (downloadProgress == null) {
                             TextButton(onClick = { vm.dismissUpdate() }) {
-                                Text("Later", color = CyberColors.TextSecondary)
+                                Text("Later", color = AttendoColors.TextSecondary)
                             }
                         }
                     }
@@ -194,57 +235,90 @@ private fun AttendoRoot(vm: AttendoViewModel = viewModel()) {
 }
 
 @Composable
-private fun FloatingCyberDock(
-    activeTab: CyberTab,
-    onSelect: (CyberTab) -> Unit,
+private fun FloatingGlassDock(
+    activeTab: AttendoTab,
+    onSelect: (AttendoTab) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val haptic = LocalHapticFeedback.current
-    Column(
+    val tabs = AttendoTab.entries
+    val shape = RoundedCornerShape(28.dp)
+
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .background(CyberColors.SurfaceDim.copy(alpha = 0.96f))
+            .height(66.dp)
+            .clip(shape)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color(0x261A2033), Color(0xE60B0F1A))
+                ),
+                shape
+            )
+            .border(
+                0.9.dp,
+                Brush.linearGradient(
+                    colors = listOf(AttendoColors.GlassBorderTop, AttendoColors.GlassBorderBottom)
+                ),
+                shape
+            )
+            .padding(6.dp)
     ) {
-        HorizontalDivider(color = CyberColors.CyberBorder, thickness = 1.dp)
-        Row(
+        val tabWidth = maxWidth / tabs.size
+        val indicatorOffset by animateDpAsState(
+            targetValue = tabWidth * activeTab.ordinal,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium
+            ),
+            label = "dockIndicator"
+        )
+
+        // Sliding Glass Pill
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            CyberTab.entries.forEach { tab ->
+                .offset(x = indicatorOffset)
+                .width(tabWidth)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(22.dp))
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            AttendoColors.Indigo.copy(alpha = 0.34f),
+                            AttendoColors.Cyan.copy(alpha = 0.18f)
+                        )
+                    )
+                )
+                .border(
+                    0.8.dp,
+                    AttendoColors.IndigoLight.copy(alpha = 0.55f),
+                    RoundedCornerShape(22.dp)
+                )
+        )
+
+        Row(modifier = Modifier.fillMaxSize()) {
+            tabs.forEach { tab ->
                 val selected = tab == activeTab
                 Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
                         .weight(1f)
-                        .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            onSelect(tab)
-                        }
-                        .padding(vertical = 4.dp)
+                        .fillMaxHeight()
+                        .physicsPressable(scaleDown = 0.91f) { onSelect(tab) },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(if (selected) CyberColors.ElectricViolet.copy(alpha = 0.30f) else Color.Transparent)
-                            .padding(horizontal = 14.dp, vertical = 4.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = tab.icon,
-                            contentDescription = tab.label,
-                            tint = if (selected) CyberColors.Primary else CyberColors.TextSecondary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Spacer(Modifier.height(3.dp))
+                    Icon(
+                        imageVector = tab.icon,
+                        contentDescription = tab.label,
+                        tint = if (selected) Color.White else AttendoColors.TextSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = tab.label,
-                        color = if (selected) CyberColors.Primary else CyberColors.TextSecondary,
-                        fontSize = 11.sp,
-                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
+                        color = if (selected) Color.White else AttendoColors.TextMuted,
+                        fontSize = 10.sp,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        maxLines = 1
                     )
                 }
             }

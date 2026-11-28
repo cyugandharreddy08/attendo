@@ -1,13 +1,12 @@
 package com.tracker75.ui.screens
 
-import androidx.compose.animation.*
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -18,14 +17,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracker75.ui.components.*
-import com.tracker75.ui.theme.CyberColors
+import com.tracker75.ui.theme.AttendoColors
 import com.tracker75.viewmodel.AttendoViewModel
 import org.json.JSONArray
 import org.json.JSONObject
@@ -35,465 +31,480 @@ import java.util.*
 @Composable
 fun TimetableScreen(
     vm: AttendoViewModel,
-    onOpenProxyAI: () -> Unit,
-    onOpenHeatmap: () -> Unit
+    onOpenCalendar: () -> Unit
 ) {
-    val selectedDate by vm.selectedDate.collectAsState()
     val snapshot by vm.snapshot.collectAsState()
-    val timetable by vm.timetable.collectAsState()
-    val haptic = LocalHapticFeedback.current
-
-    var isWeekGrid by remember { mutableStateOf(false) }
-    var showBulkDialog by remember { mutableStateOf(false) }
-    var shiftTargetClass by remember { mutableStateOf<JSONObject?>(null) }
+    val selectedDate by vm.selectedDate.collectAsState()
 
     val report = snapshot.optJSONObject("report")
     val overall = report?.optJSONObject("overall")
     val theory = report?.optJSONObject("theory")
     val lab = report?.optJSONObject("lab")
     val dayClasses = snapshot.optJSONArray("dayClasses") ?: JSONArray()
+    val subjects = snapshot.optJSONArray("subjects") ?: JSONArray()
 
-    val dateList = remember {
+    var showAddSlotDialog by remember { mutableStateOf(false) }
+    var shiftTarget by remember { mutableStateOf<JSONObject?>(null) }
+
+    val weekDays = remember {
         val cal = Calendar.getInstance()
+        cal.add(Calendar.DAY_OF_YEAR, -2)
         val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val dayFmt = SimpleDateFormat("EEE", Locale.US)
         val numFmt = SimpleDateFormat("dd", Locale.US)
-        (-3..7).map { offset ->
-            val c = (cal.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, offset) }
-            Triple(fmt.format(c.time), dayFmt.format(c.time), numFmt.format(c.time))
+        (0..6).map {
+            val d = cal.time
+            val triple = Triple(fmt.format(d), dayFmt.format(d), numFmt.format(d))
+            cal.add(Calendar.DAY_OF_YEAR, 1)
+            triple
         }
     }
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .cyberGridBackground(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 108.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 104.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // 1. Cyber Header with Classic 7.0.0 Shield Logo
+        // Header Bar
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { showBulkDialog = true }
-                ) {
-                    ClassicShieldLogo(size = 42.dp, cornerRadius = 13.dp, fontSize = 21)
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                "ATTENDO",
-                                color = CyberColors.TextPrimary,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 1.5.sp
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            StatusPill("v9.2.0", CyberColors.Primary)
-                        }
-                        Text(
-                            "Tap shield for Bulk Mark • $selectedDate",
-                            color = CyberColors.TextSecondary,
-                            fontSize = 11.sp
-                        )
-                    }
+                Column {
+                    Text(
+                        text = "Schedule",
+                        color = AttendoColors.TextPrimary,
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        text = selectedDate,
+                        color = AttendoColors.TextSecondary,
+                        fontSize = 12.sp
+                    )
                 }
-
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    IconButton(
-                        onClick = onOpenHeatmap,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(CyberColors.GlassSurface)
-                            .border(1.dp, CyberColors.CyberBorder, RoundedCornerShape(12.dp))
-                    ) {
-                        Icon(Icons.Rounded.LocalFireDepartment, "Streak", tint = CyberColors.Cancelled, modifier = Modifier.size(20.dp))
-                    }
-                    Button(
-                        onClick = onOpenProxyAI,
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = CyberColors.ElectricViolet),
-                        modifier = Modifier.height(40.dp)
-                    ) {
-                        Text("✨ Proxy", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
+                    GlassActionPill(
+                        text = "Undo",
+                        selected = false,
+                        activeColor = AttendoColors.Amber,
+                        icon = Icons.Rounded.Undo,
+                        onClick = { vm.undoLastEdit() }
+                    )
+                    GlassActionPill(
+                        text = "Calendar",
+                        selected = true,
+                        activeColor = AttendoColors.Indigo,
+                        icon = Icons.Rounded.CalendarMonth,
+                        onClick = onOpenCalendar
+                    )
+                    GlassActionPill(
+                        text = "Slot",
+                        selected = true,
+                        activeColor = AttendoColors.Cyan,
+                        icon = Icons.Rounded.Add,
+                        onClick = { showAddSlotDialog = true }
+                    )
                 }
             }
         }
 
-        // 2. Bento Overview Card (Gauge + Theory/Lab Split)
+        // Hero Attendance Glass Card
         item {
             val pct = overall?.optInt("percent", 0) ?: 0
-            val statusMsg = overall?.optString("statusMessage", "Add subjects to start tracking") ?: ""
-            val tPct = theory?.optInt("percent", 0) ?: 0
-            val lPct = lab?.optInt("percent", 0) ?: 0
+            val tgt = overall?.optInt("targetPercent", 75) ?: 75
+            val bunks = overall?.optInt("maxBunkableHours", 0) ?: 0
+            val needed = overall?.optInt("neededConsecutiveHours", 0) ?: 0
+            val eligible = overall?.optBoolean("isEligible", true) ?: true
 
-            CyberBentoCard(
-                borderColor = CyberColors.NeonCyan.copy(alpha = 0.4f),
-                glowColor = CyberColors.ElectricViolet
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    CyberAttendanceGauge(percent = pct, targetPercent = 75, size = 104.dp, strokeWidth = 10.dp)
-                    Spacer(Modifier.width(16.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("75% SHIELD STATUS", color = CyberColors.NeonCyan, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.2.sp)
-                        Spacer(Modifier.height(4.dp))
-                        Text(statusMsg, color = CyberColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(10.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            StatusPill("Theory $tPct%", CyberColors.ElectricViolet)
-                            StatusPill("Lab $lPct%", CyberColors.NeonCyan)
-                        }
-                    }
-                }
-            }
-        }
-
-        // 3. Date Strip + Day/Week Toggle
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    if (isWeekGrid) "WEEKLY MATRIX" else "DAILY TIMELINE",
-                    color = CyberColors.TextSecondary,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 1.2.sp
-                )
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(CyberColors.GlassSurface)
-                        .border(1.dp, CyberColors.CyberBorder, RoundedCornerShape(10.dp))
-                        .padding(3.dp)
-                ) {
-                    listOf(false to "Day", true to "Week").forEach { (grid, label) ->
-                        val active = isWeekGrid == grid
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (active) CyberColors.ElectricViolet else Color.Transparent)
-                                .clickable { isWeekGrid = grid }
-                                .padding(horizontal = 12.dp, vertical = 5.dp)
-                        ) {
-                            Text(label, color = if (active) Color.White else CyberColors.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-
-            if (!isWeekGrid) {
-                Spacer(Modifier.height(10.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(dateList) { (iso, dayName, dayNum) ->
-                        val selected = iso == selectedDate
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier
-                                .width(54.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(if (selected) CyberColors.ElectricViolet else CyberColors.GlassCard)
-                                .border(
-                                    1.dp,
-                                    if (selected) CyberColors.NeonCyan else CyberColors.CyberBorder,
-                                    RoundedCornerShape(14.dp)
-                                )
-                                .clickable {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    vm.selectDate(iso)
-                                }
-                                .padding(vertical = 10.dp)
-                        ) {
-                            Text(dayName.uppercase(), color = if (selected) Color.White else CyberColors.TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            Spacer(Modifier.height(4.dp))
-                            Text(dayNum, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Black)
-                        }
-                    }
-                }
-            }
-        }
-
-        // 4. Classes List OR Week Grid
-        if (isWeekGrid) {
-            val days = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
-            items(days) { day ->
-                val daySlots = (0 until timetable.length()).mapNotNull { i ->
-                    val obj = timetable.optJSONObject(i)
-                    if (obj?.optString("day_of_week")?.equals(day, ignoreCase = true) == true) obj else null
-                }
-                CyberBentoCard {
-                    Text(day.uppercase(), color = CyberColors.NeonCyan, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp)
-                    Spacer(Modifier.height(8.dp))
-                    if (daySlots.isEmpty()) {
-                        Text("No classes scheduled", color = CyberColors.TextMuted, fontSize = 12.sp)
-                    } else {
-                        daySlots.forEach { slot ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    slot.optString("subject_name", "Subject"),
-                                    color = CyberColors.TextPrimary,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Text(
-                                    "${slot.optString("start_time")} - ${slot.optString("end_time")}",
-                                    color = CyberColors.TextSecondary,
-                                    fontSize = 12.sp
-                                )
+            StaggeredEntrance(index = 0) {
+                GlassCard(accentColor = if (eligible) AttendoColors.Indigo else AttendoColors.Rose) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        AnimatedLiquidRing(
+                            percent = pct,
+                            targetPercent = tgt,
+                            size = 92.dp,
+                            strokeWidth = 8.dp,
+                            label = "OVERALL"
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (eligible) "Safe Zone • Target $tgt%" else "Danger Zone • Target $tgt%",
+                                color = if (eligible) AttendoColors.Emerald else AttendoColors.Rose,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = if (eligible) {
+                                    "You can safely bunk $bunks lecture(s)"
+                                } else {
+                                    "Attend $needed consecutive lecture(s)"
+                                },
+                                color = AttendoColors.TextPrimary,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                SplitChip("Theory", theory?.optInt("percent", 0) ?: 0, AttendoColors.IndigoLight)
+                                SplitChip("Lab", lab?.optInt("percent", 0) ?: 0, AttendoColors.Cyan)
                             }
                         }
                     }
                 }
             }
-        } else if (dayClasses.length() == 0) {
-            item {
-                CyberBentoCard {
+        }
+
+        // Week Day Selector Strip
+        item {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                itemsIndexed(weekDays) { _, (iso, dayLabel, dayNum) ->
+                    val isSelected = iso == selectedDate
+                    val bg by animateColorAsState(
+                        if (isSelected) AttendoColors.Indigo.copy(alpha = 0.32f) else Color(0x10FFFFFF),
+                        label = "dayBg"
+                    )
+                    val border by animateColorAsState(
+                        if (isSelected) AttendoColors.IndigoLight else Color(0x1FFFFFFF),
+                        label = "dayBorder"
+                    )
                     Column(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
+                        modifier = Modifier
+                            .width(56.dp)
+                            .physicsPressable(scaleDown = 0.92f) { vm.selectDate(iso) }
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(bg)
+                            .border(0.9.dp, border, RoundedCornerShape(18.dp))
+                            .padding(vertical = 10.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("🌴", fontSize = 34.sp)
-                        Spacer(Modifier.height(8.dp))
-                        Text("No Classes Scheduled", color = CyberColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(4.dp))
-                        Text("Add subjects & timetable slots in the Subjects tab.", color = CyberColors.TextSecondary, fontSize = 12.sp)
+                        Text(
+                            text = dayLabel,
+                            color = if (isSelected) AttendoColors.Cyan else AttendoColors.TextSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = dayNum,
+                            color = AttendoColors.TextPrimary,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                }
+            }
+        }
+
+        // Bulk Mark Entire Day Bar
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                GlassActionPill(
+                    text = "All Present",
+                    selected = false,
+                    activeColor = AttendoColors.Emerald,
+                    icon = Icons.Rounded.DoneAll,
+                    onClick = { vm.markEntireDay(selectedDate, "present") },
+                    modifier = Modifier.weight(1f)
+                )
+                GlassActionPill(
+                    text = "All Absent",
+                    selected = false,
+                    activeColor = AttendoColors.Rose,
+                    icon = Icons.Rounded.Close,
+                    onClick = { vm.markEntireDay(selectedDate, "absent") },
+                    modifier = Modifier.weight(1f)
+                )
+                GlassActionPill(
+                    text = "Holiday",
+                    selected = false,
+                    activeColor = AttendoColors.Amber,
+                    icon = Icons.Rounded.WbSunny,
+                    onClick = { vm.markEntireDay(selectedDate, "holiday") },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        if (dayClasses.length() == 0) {
+            item {
+                GlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    accentColor = AttendoColors.Cyan
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            Icons.Rounded.Weekend,
+                            contentDescription = null,
+                            tint = AttendoColors.Cyan,
+                            modifier = Modifier.size(36.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "No classes scheduled",
+                            color = AttendoColors.TextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                        Text(
+                            "Tap '+ Slot' above or ask Attendo AI to schedule classes.",
+                            color = AttendoColors.TextSecondary,
+                            fontSize = 12.sp
+                        )
                     }
                 }
             }
         } else {
-            items(dayClasses.length()) { idx ->
-                val inst = dayClasses.getJSONObject(idx)
-                LectureInstanceCard(
-                    inst = inst,
-                    onMark = { status ->
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        vm.markInstance(inst.getLong("id"), status)
-                    },
-                    onShift = { shiftTargetClass = inst },
-                    onUnshift = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        vm.unshiftInstance(inst.getLong("id"))
-                    }
-                )
+            itemsIndexed((0 until dayClasses.length()).map { dayClasses.getJSONObject(it) }) { idx, cls ->
+                StaggeredEntrance(index = idx + 1) {
+                    LectureGlassCard(
+                        cls = cls,
+                        onMark = { st ->
+                            val cur = cls.optString("status", "")
+                            val next = if (cur == st) null else st
+                            vm.markInstance(cls.optLong("id"), next)
+                        },
+                        onShift = { shiftTarget = cls },
+                        onUnshift = { vm.unshiftInstance(cls.optLong("id")) }
+                    )
+                }
             }
         }
     }
 
-    if (showBulkDialog) {
-        AlertDialog(
-            onDismissRequest = { showBulkDialog = false },
-            containerColor = CyberColors.GlassSurface,
-            title = { Text("Bulk Mark $selectedDate", color = CyberColors.TextPrimary, fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(
-                        "present" to "Mark All Present",
-                        "absent" to "Mark All Absent",
-                        "holiday" to "Mark Day as Holiday",
-                        "cancelled" to "Mark All Cancelled"
-                    ).forEach { (status, label) ->
-                        Button(
-                            onClick = {
-                                vm.markEntireDay(selectedDate, status)
-                                showBulkDialog = false
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = CyberColors.GlassElevated)
-                        ) {
-                            Text(label, color = CyberColors.TextPrimary)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showBulkDialog = false }) {
-                    Text("Close", color = CyberColors.NeonCyan)
-                }
+    if (showAddSlotDialog) {
+        AddTimetableSlotDialog(
+            subjects = subjects,
+            onDismiss = { showAddSlotDialog = false },
+            onSave = { subjId, day, start, end, room ->
+                vm.addTimetableEntry(subjId, day, start, end, room)
+                showAddSlotDialog = false
             }
         )
     }
 
-    shiftTargetClass?.let { inst ->
-        ShiftClassDialog(
-            inst = inst,
-            defaultDate = selectedDate,
-            onDismiss = { shiftTargetClass = null },
-            onConfirm = { targetDate, start, end, reason, perm ->
-                vm.shiftInstance(inst.getLong("id"), targetDate, start, end, reason, perm)
-                shiftTargetClass = null
+    shiftTarget?.let { target ->
+        ShiftLectureDialog(
+            cls = target,
+            onDismiss = { shiftTarget = null },
+            onShift = { tgtDate, start, end, reason, perm ->
+                vm.shiftInstance(target.optLong("id"), tgtDate, start, end, reason, perm)
+                shiftTarget = null
             }
         )
     }
 }
 
 @Composable
-private fun LectureInstanceCard(
-    inst: JSONObject,
-    onMark: (String?) -> Unit,
+private fun SplitChip(label: String, pct: Int, color: Color) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(color.copy(alpha = 0.16f))
+            .border(0.7.dp, color.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(color))
+        Spacer(modifier = Modifier.width(6.dp))
+        Text("$label $pct%", color = AttendoColors.TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun LectureGlassCard(
+    cls: JSONObject,
+    onMark: (String) -> Unit,
     onShift: () -> Unit,
     onUnshift: () -> Unit
 ) {
-    val name = inst.optString("subject_name", "Unknown Subject")
-    val start = inst.optString("start_time", "")
-    val end = inst.optString("end_time", "")
-    val room = inst.optString("room", "")
-    val status = if (inst.isNull("status")) null else inst.optString("status")
-    val isOverride = inst.optInt("is_override", 0) == 1
-    val notes = inst.optString("notes", "")
-
-    val statusColor = when (status) {
-        "present" -> CyberColors.Present
-        "absent" -> CyberColors.Absent
-        "holiday" -> CyberColors.Holiday
-        "cancelled" -> CyberColors.Cancelled
-        "shifted" -> CyberColors.Shifted
-        else -> CyberColors.CyberBorder
+    val name = cls.optString("subject_name", "Subject")
+    val start = cls.optString("start_time", "09:00")
+    val end = cls.optString("end_time", "10:00")
+    val room = cls.optString("room", "")
+    val status = cls.optString("status", "")
+    val isOverride = cls.optInt("is_override", 0) == 1
+    val accent = when (status) {
+        "present" -> AttendoColors.Emerald
+        "absent" -> AttendoColors.Rose
+        "holiday" -> AttendoColors.Amber
+        "cancelled", "shifted" -> AttendoColors.TextMuted
+        else -> AttendoColors.Indigo
     }
 
-    CyberBentoCard(borderColor = statusColor.copy(alpha = 0.65f)) {
+    GlassCard(accentColor = accent) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(name, color = CyberColors.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (isOverride) {
-                        Spacer(Modifier.width(6.dp))
-                        StatusPill("SHIFTED IN", CyberColors.Shifted)
-                    }
-                }
-                Spacer(Modifier.height(3.dp))
                 Text(
-                    buildString {
-                        append("$start – $end")
-                        if (room.isNotBlank()) append(" • Room $room")
-                        if (notes.isNotBlank()) append(" • $notes")
-                    },
-                    color = CyberColors.TextSecondary,
+                    text = name,
+                    color = AttendoColors.TextPrimary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "$start – $end" + if (room.isNotBlank()) "  •  $room" else "",
+                    color = AttendoColors.TextSecondary,
                     fontSize = 12.sp
                 )
             }
-            if (status != null) {
-                StatusPill(status, statusColor)
+            if (isOverride) {
+                GlassActionPill(
+                    text = "Unshift",
+                    selected = true,
+                    activeColor = AttendoColors.Amber,
+                    onClick = onUnshift
+                )
+            } else {
+                GlassActionPill(
+                    text = "Shift",
+                    selected = false,
+                    activeColor = AttendoColors.Cyan,
+                    icon = Icons.Rounded.SwapHoriz,
+                    onClick = onShift
+                )
             }
         }
 
-        Spacer(Modifier.height(12.dp))
-
-        if (status == "shifted" || isOverride) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (status != "shifted") {
-                    QuickMarkChip("Present", CyberColors.Present, status == "present") { onMark("present") }
-                    QuickMarkChip("Absent", CyberColors.Absent, status == "absent") { onMark("absent") }
-                }
-                QuickMarkChip("Unshift ↩", CyberColors.Shifted, false) { onUnshift() }
-            }
-        } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                QuickMarkChip("✓ Present", CyberColors.Present, status == "present") {
-                    onMark(if (status == "present") null else "present")
-                }
-                QuickMarkChip("✕ Absent", CyberColors.Absent, status == "absent") {
-                    onMark(if (status == "absent") null else "absent")
-                }
-                QuickMarkChip("Holiday", CyberColors.Holiday, status == "holiday") {
-                    onMark(if (status == "holiday") null else "holiday")
-                }
-                QuickMarkChip("Shift ⇄", CyberColors.NeonCyan, false) { onShift() }
-            }
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            GlassActionPill(
+                text = "Present",
+                selected = status == "present",
+                activeColor = AttendoColors.Emerald,
+                onClick = { onMark("present") },
+                modifier = Modifier.weight(1f)
+            )
+            GlassActionPill(
+                text = "Absent",
+                selected = status == "absent",
+                activeColor = AttendoColors.Rose,
+                onClick = { onMark("absent") },
+                modifier = Modifier.weight(1f)
+            )
+            GlassActionPill(
+                text = "Holiday",
+                selected = status == "holiday",
+                activeColor = AttendoColors.Amber,
+                onClick = { onMark("holiday") },
+                modifier = Modifier.weight(1f)
+            )
+            GlassActionPill(
+                text = "Cancel",
+                selected = status == "cancelled",
+                activeColor = AttendoColors.TextMuted,
+                onClick = { onMark("cancelled") },
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }
 
 @Composable
-private fun RowScope.QuickMarkChip(
-    label: String,
-    color: Color,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .weight(1f)
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) color.copy(alpha = 0.28f) else CyberColors.GlassSurface)
-            .border(1.dp, if (selected) color else CyberColors.CyberBorder, RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            label,
-            color = if (selected) Color.White else color,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1
-        )
-    }
-}
-
-@Composable
-private fun ShiftClassDialog(
-    inst: JSONObject,
-    defaultDate: String,
+private fun AddTimetableSlotDialog(
+    subjects: JSONArray,
     onDismiss: () -> Unit,
-    onConfirm: (String, String, String, String, Boolean) -> Unit
+    onSave: (Long, String, String, String, String) -> Unit
 ) {
-    var targetDate by remember { mutableStateOf(defaultDate) }
-    var startTime by remember { mutableStateOf("14:00") }
-    var endTime by remember { mutableStateOf("15:00") }
-    var reason by remember { mutableStateOf("") }
-    var isPermanent by remember { mutableStateOf(false) }
+    val subjectList = remember(subjects) {
+        (0 until subjects.length()).map { subjects.getJSONObject(it).getJSONObject("subject") }
+    }
+    var selectedSubjId by remember { mutableStateOf(subjectList.firstOrNull()?.optLong("id") ?: 0L) }
+    var day by remember { mutableStateOf("Monday") }
+    var start by remember { mutableStateOf("09:00") }
+    var end by remember { mutableStateOf("10:00") }
+    var room by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = CyberColors.GlassSurface,
-        title = { Text("Shift ${inst.optString("subject_name")}", color = CyberColors.TextPrimary, fontWeight = FontWeight.Bold) },
+        containerColor = AttendoColors.ElevatedSurface,
+        title = { Text("Add Timetable Slot", color = AttendoColors.TextPrimary, fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(value = targetDate, onValueChange = { targetDate = it }, label = { Text("Target Date (YYYY-MM-DD)") }, singleLine = true)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(value = startTime, onValueChange = { startTime = it }, label = { Text("Start") }, modifier = Modifier.weight(1f), singleLine = true)
-                    OutlinedTextField(value = endTime, onValueChange = { endTime = it }, label = { Text("End") }, modifier = Modifier.weight(1f), singleLine = true)
-                }
-                OutlinedTextField(value = reason, onValueChange = { reason = it }, label = { Text("Reason (optional)") }, singleLine = true)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = isPermanent, onCheckedChange = { isPermanent = it })
-                    Text("Update weekly timetable permanently", color = CyberColors.TextSecondary, fontSize = 12.sp)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (subjectList.isEmpty()) {
+                    Text("Add a subject first in Subjects tab.", color = AttendoColors.Amber)
+                } else {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        itemsIndexed(subjectList) { _, s ->
+                            val sid = s.optLong("id")
+                            GlassActionPill(
+                                text = s.optString("name"),
+                                selected = sid == selectedSubjId,
+                                activeColor = AttendoColors.Indigo,
+                                onClick = { selectedSubjId = sid }
+                            )
+                        }
+                    }
+                    OutlinedTextField(value = day, onValueChange = { day = it }, label = { Text("Day (e.g. Monday)") })
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(value = start, onValueChange = { start = it }, label = { Text("Start") }, modifier = Modifier.weight(1f))
+                        OutlinedTextField(value = end, onValueChange = { end = it }, label = { Text("End") }, modifier = Modifier.weight(1f))
+                    }
+                    OutlinedTextField(value = room, onValueChange = { room = it }, label = { Text("Room (optional)") })
                 }
             }
         },
         confirmButton = {
             Button(
-                onClick = { onConfirm(targetDate, startTime, endTime, reason, isPermanent) },
-                colors = ButtonDefaults.buttonColors(containerColor = CyberColors.ElectricViolet)
-            ) {
-                Text("Shift Class")
+                onClick = { if (selectedSubjId > 0) onSave(selectedSubjId, day, start, end, room) },
+                enabled = selectedSubjId > 0
+            ) { Text("Save Slot") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+@Composable
+private fun ShiftLectureDialog(
+    cls: JSONObject,
+    onDismiss: () -> Unit,
+    onShift: (String, String, String, String, Boolean) -> Unit
+) {
+    var tgtDate by remember { mutableStateOf(cls.optString("date", "")) }
+    var start by remember { mutableStateOf("14:00") }
+    var end by remember { mutableStateOf("15:00") }
+    var reason by remember { mutableStateOf("Rescheduled") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = AttendoColors.ElevatedSurface,
+        title = { Text("Shift ${cls.optString("subject_name")}", color = AttendoColors.TextPrimary, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = tgtDate, onValueChange = { tgtDate = it }, label = { Text("Target Date (YYYY-MM-DD)") })
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = start, onValueChange = { start = it }, label = { Text("Start") }, modifier = Modifier.weight(1f))
+                    OutlinedTextField(value = end, onValueChange = { end = it }, label = { Text("End") }, modifier = Modifier.weight(1f))
+                }
+                OutlinedTextField(value = reason, onValueChange = { reason = it }, label = { Text("Reason") })
             }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel", color = CyberColors.TextSecondary) }
-        }
+        confirmButton = {
+            Button(onClick = { onShift(tgtDate, start, end, reason, false) }) { Text("Shift Class") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }

@@ -1,7 +1,9 @@
 pub mod ai_agent;
 pub mod attendance_engine;
+pub mod attendo_ai;
 pub mod cloud_services;
 pub mod db;
+pub mod delta_patch;
 pub mod error;
 pub mod jni_bridge;
 pub mod models;
@@ -297,10 +299,36 @@ fn dispatch_inner(method: &str, args: &Value) -> AttendoResult<Value> {
             let id = cloud_services::submit_bug_report(conn, title, desc, cat, sev, steps)?;
             Ok(json!({ "id": id }))
         }),
+        // ---- RECOVERY VAULT ----
+        "get_deleted_history" => with_conn(|conn| {
+            let list = db::list_deleted_records(conn)?;
+            Ok(serde_json::to_value(list)?)
+        }),
+        "restore_deleted_item" => with_conn(|conn| {
+            let res = if let Some(id) = args.get("audit_id").and_then(|v| v.as_i64()) {
+                db::restore_deleted_record(conn, id)?
+            } else {
+                let q = args.get("query").and_then(|v| v.as_str());
+                db::find_and_restore_deleted(conn, q)?
+            };
+            Ok(serde_json::to_value(res)?)
+        }),
+        "undo_last_edit" => with_conn(|conn| {
+            let msg = db::undo_last_attendance_edit(conn)?;
+            Ok(json!({ "message": msg }))
+        }),
+
         "check_github_update" => {
-            let code = args.get("version_code").and_then(|v| v.as_i64()).unwrap_or(900) as i32;
+            let code = args.get("version_code").and_then(|v| v.as_i64()).unwrap_or(1000) as i32;
             let res = cloud_services::check_for_github_update(code)?;
             Ok(serde_json::to_value(res)?)
+        }
+        "apply_apk_patch" => {
+            let old_apk = args.get("old_apk_path").and_then(|v| v.as_str()).ok_or_else(|| AttendoError::InvalidInput("missing old_apk_path".into()))?;
+            let patch = args.get("patch_path").and_then(|v| v.as_str()).ok_or_else(|| AttendoError::InvalidInput("missing patch_path".into()))?;
+            let out_apk = args.get("out_apk_path").and_then(|v| v.as_str()).ok_or_else(|| AttendoError::InvalidInput("missing out_apk_path".into()))?;
+            let written = delta_patch::apply_apk_patch(old_apk, patch, out_apk)?;
+            Ok(json!({ "bytesWritten": written }))
         }
 
         _ => Err(AttendoError::InvalidInput(format!("Unknown RPC method: {}", method))),
@@ -437,5 +465,33 @@ mod tests {
         assert_eq!(subjs, 1);
         // Active key remains the new device key
         assert_eq!(sync::get_or_generate_sync_key(&conn).unwrap(), active_key);
+    }
+
+    #[test]
+    fn test_custom_rust_ai_full_control_and_db_recovery() {
+        let mut conn = db::open_and_init(":memory:").unwrap();
+
+        // 1. Add subject via natural prompt
+        let (r1, _) = ai_agent::send_chat_message(&mut conn, "add subject Operating Systems theory 4 credits", &[]).unwrap();
+        assert!(r1.contains("Operating Systems"), "got: {}", r1);
+        assert_eq!(db::get_all_subjects(&conn).unwrap().len(), 1);
+
+        // 2. Schedule timetable slot via prompt
+        let (r2, _) = ai_agent::send_chat_message(&mut conn, "schedule Operating Systems Monday 10:00 to 11:00 in LH1", &[]).unwrap();
+        assert!(r2.contains("Monday"), "got: {}", r2);
+        assert_eq!(db::get_all_timetable_entries(&conn).unwrap().len(), 1);
+
+        // 3. Accidentally delete subject via prompt
+        let (r3, _) = ai_agent::send_chat_message(&mut conn, "delete subject Operating Systems", &[]).unwrap();
+        assert!(r3.contains("Deleted"), "got: {}", r3);
+        assert_eq!(db::get_all_subjects(&conn).unwrap().len(), 0);
+        assert_eq!(db::list_deleted_records(&conn).unwrap().len(), 1);
+
+        // 4. Ask Rust AI to recover deleted subject + its timetable from DB!
+        let (r4, card) = ai_agent::send_chat_message(&mut conn, "i accidentally deleted Operating Systems class help me recover it from database", &[]).unwrap();
+        assert!(r4.contains("Recovery Complete"), "got: {}", r4);
+        assert!(card.is_some());
+        assert_eq!(db::get_all_subjects(&conn).unwrap().len(), 1);
+        assert_eq!(db::get_all_timetable_entries(&conn).unwrap().len(), 1);
     }
 }

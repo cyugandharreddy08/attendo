@@ -1,84 +1,99 @@
 package com.tracker75.ui.theme
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 
-/**
- * Exact Material 3 Expressive design tokens from the Attendo Tailwind/Stitch spec.
- */
-object CyberColors {
-    // Surfaces
-    val ObsidianBg = Color(0xFF090B10)          // surface / background
-    val SurfaceDim = Color(0xFF06070B)          // surface-container-lowest / surface-dim
-    val GlassCard = Color(0xFF11141D)           // surface-container-low
-    val GlassSurface = Color(0xFF171B26)        // surface-container
-    val GlassElevated = Color(0xFF1F2433)       // surface-container-high
-    val SurfaceHighest = Color(0xFF282E40)      // surface-container-highest
-    val CyberBorder = Color(0xFF232838)         // outline-variant
-    val Outline = Color(0xFF6E768E)             // outline
+object AttendoColors {
+    val ObsidianCanvas = Color(0xFF07090F)
+    val DeepSurface = Color(0xFF0D111A)
+    val ElevatedSurface = Color(0xFF141926)
 
-    // Brand & Accents
-    val Primary = Color(0xFFC4B5FD)             // primary
-    val OnPrimary = Color(0xFF2E1065)
-    val ElectricViolet = Color(0xFF7C3AED)      // primary-container
-    val OnPrimaryContainer = Color(0xFFF5F3FF)
-    val VioletBright = Color(0xFFC4B5FD)
-    val VioletDeep = Color(0xFF6D28D9)
+    // True multi-stop glassmorphism tokens
+    val GlassTop = Color(0x20FFFFFF)
+    val GlassMid = Color(0x10FFFFFF)
+    val GlassBottom = Color(0x06FFFFFF)
+    val GlassBorderTop = Color(0x44FFFFFF)
+    val GlassBorderBottom = Color(0x0EFFFFFF)
 
-    val NeonCyan = Color(0xFF38BDF8)            // tertiary
-    val TertiaryContainer = Color(0xFF0C4A6E)
-    val OnTertiaryContainer = Color(0xFFBAE6FD)
-
-    // Semantic Status
-    val Present = Color(0xFF34D399)             // secondary (emerald)
-    val SecondaryContainer = Color(0xFF064E3B)
-    val OnSecondaryContainer = Color(0xFF6EE7B7)
-
-    val Cancelled = Color(0xFFFBBF24)           // warning (amber)
-    val WarningContainer = Color(0xFF451A03)
-    val OnWarningContainer = Color(0xFFFDE68A)
-
-    val Absent = Color(0xFFFB7185)              // error (rose)
-    val ErrorContainer = Color(0xFF4C0519)
-    val OnErrorContainer = Color(0xFFFECDD3)
-
-    val Holiday = Color(0xFF38BDF8)
-    val Shifted = Color(0xFFC4B5FD)
+    // Refined Obsidian Aurora Palette
+    val Indigo = Color(0xFF6366F1)
+    val IndigoLight = Color(0xFF818CF8)
+    val Violet = Color(0xFFA855F7)
+    val Cyan = Color(0xFF22D3EE)
+    val Emerald = Color(0xFF10B981)
+    val Amber = Color(0xFFF59E0B)
+    val Rose = Color(0xFFF43F5E)
 
     // Typography
-    val TextPrimary = Color(0xFFF2F4F8)         // on-surface
-    val TextSecondary = Color(0xFF9CA3B8)       // on-surface-variant
-    val TextMuted = Color(0xFF6E768E)           // outline
+    val TextPrimary = Color(0xFFF8FAFC)
+    val TextSecondary = Color(0xFF94A3B8)
+    val TextMuted = Color(0xFF64748B)
 }
 
 private val AttendoDarkScheme = darkColorScheme(
-    primary = CyberColors.Primary,
-    onPrimary = CyberColors.OnPrimary,
-    primaryContainer = CyberColors.ElectricViolet,
-    onPrimaryContainer = CyberColors.OnPrimaryContainer,
-    secondary = CyberColors.Present,
-    secondaryContainer = CyberColors.SecondaryContainer,
-    onSecondaryContainer = CyberColors.OnSecondaryContainer,
-    tertiary = CyberColors.NeonCyan,
-    background = CyberColors.ObsidianBg,
-    surface = CyberColors.ObsidianBg,
-    surfaceVariant = CyberColors.GlassSurface,
-    onBackground = CyberColors.TextPrimary,
-    onSurface = CyberColors.TextPrimary,
-    onSurfaceVariant = CyberColors.TextSecondary,
-    outline = CyberColors.Outline,
-    outlineVariant = CyberColors.CyberBorder,
-    error = CyberColors.Absent,
-    errorContainer = CyberColors.ErrorContainer,
-    onErrorContainer = CyberColors.OnErrorContainer,
+    primary = AttendoColors.IndigoLight,
+    onPrimary = Color.White,
+    secondary = AttendoColors.Cyan,
+    onSecondary = AttendoColors.ObsidianCanvas,
+    tertiary = AttendoColors.Emerald,
+    background = AttendoColors.ObsidianCanvas,
+    surface = AttendoColors.DeepSurface,
+    surfaceVariant = AttendoColors.ElevatedSurface,
+    onBackground = AttendoColors.TextPrimary,
+    onSurface = AttendoColors.TextPrimary,
+    onSurfaceVariant = AttendoColors.TextSecondary,
+    error = AttendoColors.Rose,
+    outline = AttendoColors.GlassBorderTop
+)
+
+val AttendoTypography = Typography(
+    displaySmall = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 32.sp,
+        letterSpacing = (-0.8).sp,
+        fontFeatureSettings = "tnum"
+    ),
+    headlineSmall = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Bold,
+        fontSize = 22.sp,
+        letterSpacing = (-0.4).sp,
+        fontFeatureSettings = "tnum"
+    ),
+    titleMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 16.sp,
+        letterSpacing = (-0.2).sp
+    ),
+    bodyMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Normal,
+        fontSize = 14.sp,
+        lineHeight = 20.sp
+    ),
+    labelMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 11.sp,
+        letterSpacing = 0.4.sp,
+        fontFeatureSettings = "tnum"
+    )
 )
 
 @Composable
 fun AttendoTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = AttendoDarkScheme,
+        typography = AttendoTypography,
         content = content
     )
 }

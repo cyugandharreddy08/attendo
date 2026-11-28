@@ -136,6 +136,23 @@ pub fn check_for_github_update(current_code: i32) -> AttendoResult<UpdateCheckRe
         .unwrap_or("https://github.com/cyugandharreddy08/attendo/releases/latest")
         .to_string();
 
+    let patch_asset_name = format!("patch-from-{}-to-{}.qbs", current_code, latest_code);
+    let mut patch_url: Option<String> = None;
+    let mut patch_size_bytes: Option<u64> = None;
+
+    if let Some(arr) = data.get("assets").and_then(|a| a.as_array()) {
+        for item in arr {
+            if item.get("name").and_then(|n| n.as_str()) == Some(patch_asset_name.as_str()) {
+                patch_url = item
+                    .get("browser_download_url")
+                    .and_then(|u| u.as_str())
+                    .map(|s| s.to_string());
+                patch_size_bytes = item.get("size").and_then(|s| s.as_u64());
+                break;
+            }
+        }
+    }
+
     let notes = data
         .get("body")
         .and_then(|v| v.as_str())
@@ -147,6 +164,8 @@ pub fn check_for_github_update(current_code: i32) -> AttendoResult<UpdateCheckRe
         latest_version: tag,
         latest_code,
         apk_url,
+        patch_url,
+        patch_size_bytes,
         release_notes: notes,
         is_mandatory: false,
     })

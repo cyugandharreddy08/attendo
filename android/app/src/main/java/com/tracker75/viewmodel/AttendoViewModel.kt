@@ -40,7 +40,7 @@ class AttendoViewModel : ViewModel() {
             ChatMsg(
                 id = "welcome",
                 role = "assistant",
-                content = "### 👋 Hey! I'm **Proxy**, your 24/7 Attendance Wingman.\n\nPowered by **Rust native speed**, I can:\n• Check your safe bunks & danger-zone subjects\n• Shift or unshift classes to leisure slots\n• Simulate bunk consequences before you skip\n• Plan your attendance till semester end!",
+                content = "### ⚡ Hey! I'm **Attendo Copilot**\n\nBuilt **from scratch in pure Rust** (100% offline • `<2ms`), I control **everything** in Attendo from a single prompt:\n• Mark attendance (*\"Mark today's OS present\"*)\n• Add/edit/delete subjects & timetable slots\n• Simulate bunks & plan your semester\n• **Recover accidentally deleted classes** from SQLite!",
                 timestamp = "Now"
             )
         )
@@ -70,6 +70,9 @@ class AttendoViewModel : ViewModel() {
 
     private val _searchResults = MutableStateFlow(JSONArray())
     val searchResults: StateFlow<JSONArray> = _searchResults.asStateFlow()
+
+    private val _deletedHistory = MutableStateFlow(JSONArray())
+    val deletedHistory: StateFlow<JSONArray> = _deletedHistory.asStateFlow()
 
     private val _bannerMessage = MutableStateFlow<String?>(null)
     val bannerMessage: StateFlow<String?> = _bannerMessage.asStateFlow()
@@ -515,14 +518,45 @@ class AttendoViewModel : ViewModel() {
 
     fun checkForUpdate(silent: Boolean = false) {
         viewModelScope.launch {
-            AttendoCore.invoke("check_github_update", JSONObject().put("version_code", 920)).onSuccess {
+            AttendoCore.invoke("check_github_update", JSONObject().put("version_code", 1000)).onSuccess {
                 if (it.optBoolean("hasUpdate", false)) {
                     _updateInfo.value = it
                 } else if (!silent) {
-                    showBanner("You are on the latest version (v9.2.0)!")
+                    showBanner("You are on the latest version (v10.0.0)!")
                 }
             }.onFailure {
                 if (!silent) showBanner("Could not reach GitHub Releases")
+            }
+        }
+    }
+
+    fun refreshDeletedHistory() {
+        viewModelScope.launch {
+            AttendoCore.invokeArray("get_deleted_history").onSuccess {
+                _deletedHistory.value = it
+            }
+        }
+    }
+
+    fun restoreDeletedItem(auditId: Long) {
+        viewModelScope.launch {
+            AttendoCore.invoke("restore_deleted_item", JSONObject().put("audit_id", auditId)).onSuccess { res ->
+                showBanner(res.optString("message", "Restored from Recovery Vault!"))
+                refreshAll()
+                refreshDeletedHistory()
+            }.onFailure { err ->
+                showBanner("Restore failed: ${err.message}")
+            }
+        }
+    }
+
+    fun undoLastEdit() {
+        viewModelScope.launch {
+            AttendoCore.invoke("undo_last_edit").onSuccess { res ->
+                showBanner(res.optString("message", "Last action undone"))
+                refreshAll()
+            }.onFailure { err ->
+                showBanner(err.message ?: "Nothing to undo")
             }
         }
     }
@@ -532,11 +566,11 @@ class AttendoViewModel : ViewModel() {
         _downloadProgress.value = null
     }
 
-    fun startInAppUpdate(context: Context, apkUrl: String) {
+    fun startInAppUpdate(context: Context, apkUrl: String, patchUrl: String? = null) {
         if (_downloadProgress.value != null) return
         _downloadProgress.value = 0
         viewModelScope.launch {
-            AppUpdater.downloadAndInstall(context, apkUrl) { pct ->
+            AppUpdater.downloadAndInstall(context, apkUrl, patchUrl) { pct ->
                 _downloadProgress.value = pct
             }.onSuccess {
                 _downloadProgress.value = null

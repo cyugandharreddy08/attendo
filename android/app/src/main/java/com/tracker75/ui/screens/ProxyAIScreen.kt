@@ -2,7 +2,6 @@ package com.tracker75.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -11,49 +10,42 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.ArrowUpward
-import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.RestoreFromTrash
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.tracker75.ui.components.CyberBentoCard
-import com.tracker75.ui.components.StatusPill
-import com.tracker75.ui.components.cyberGridBackground
-import com.tracker75.ui.theme.CyberColors
+import com.tracker75.ui.components.GlassActionPill
+import com.tracker75.ui.components.GlassCard
+import com.tracker75.ui.components.physicsPressable
+import com.tracker75.ui.theme.AttendoColors
 import com.tracker75.viewmodel.AttendoViewModel
 import com.tracker75.viewmodel.ChatMsg
 
-private val QUICK_PROMPTS = listOf(
-    "🌴 Can I bunk tomorrow?",
-    "📊 What is my current attendance status?",
-    "⚠️ Which subjects are in the danger zone?",
-    "📅 Classes run till Dec 20, how many can I skip?",
-    "🔄 Shift tomorrow's class to Thursday leisure hour"
-)
-
 @Composable
-fun ProxyAIScreen(
-    vm: AttendoViewModel,
-    onBack: (() -> Unit)? = null
-) {
+fun ProxyAIScreen(vm: AttendoViewModel) {
     val messages by vm.chatMessages.collectAsState()
-    val loading by vm.aiLoading.collectAsState()
-    val needleReady by vm.needleReady.collectAsState()
-    val searchResults by vm.searchResults.collectAsState()
-    var input by remember { mutableStateOf("") }
-    var showSearchDialog by remember { mutableStateOf(false) }
+    val aiLoading by vm.aiLoading.collectAsState()
+    var prompt by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
-    LaunchedEffect(Unit) {
-        vm.refreshNeedleStatus()
-    }
+    val quickPrompts = listOf(
+        "What is my attendance?",
+        "Recover deleted class",
+        "Mark all classes present today",
+        "What if I bunk tomorrow?",
+        "Show recovery vault",
+        "When am I free today?"
+    )
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
@@ -64,149 +56,154 @@ fun ProxyAIScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .cyberGridBackground()
+            .padding(bottom = 86.dp)
     ) {
         // Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(CyberColors.GlassCard)
-                .border(1.dp, CyberColors.CyberBorder)
-                .padding(horizontal = 12.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (onBack != null) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = CyberColors.TextPrimary)
-                }
-            }
-            Text("🤖", fontSize = 22.sp)
-            Spacer(Modifier.width(10.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Proxy AI", color = CyberColors.TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Black)
-                    Spacer(Modifier.width(8.dp))
-                    StatusPill(
-                        if (needleReady) "NEEDLE 3 OFFLINE" else "HYBRID AI",
-                        if (needleReady) CyberColors.Present else CyberColors.NeonCyan
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.linearGradient(listOf(AttendoColors.Indigo, AttendoColors.Cyan))
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Rounded.AutoAwesome,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
-                Text("On-Device Needle 3 + Cloud Wingman", color = CyberColors.TextSecondary, fontSize = 11.sp)
-            }
-            IconButton(onClick = { showSearchDialog = true }) {
-                Icon(Icons.Rounded.Search, "Semantic Search", tint = CyberColors.NeonCyan)
-            }
-        }
-
-        // Chat Stream
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(messages, key = { it.id }) { msg ->
-                ChatBubble(msg)
-            }
-            if (loading) {
-                item {
-                    CyberBentoCard(borderColor = CyberColors.NeonCyan.copy(alpha = 0.4f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = CyberColors.NeonCyan)
-                            Spacer(Modifier.width(10.dp))
-                            Text("Proxy is analyzing your timetable & attendance...", color = CyberColors.TextSecondary, fontSize = 12.sp)
-                        }
-                    }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        "Attendo Copilot",
+                        color = AttendoColors.TextPrimary,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        "Pure Rust Transformer • 100% Offline",
+                        color = AttendoColors.Emerald,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
         }
 
         // Quick Prompt Chips
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(QUICK_PROMPTS) { prompt ->
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(CyberColors.GlassSurface)
-                        .border(1.dp, CyberColors.CyberBorder, CircleShape)
-                        .clickable { vm.sendAiChat(prompt) }
-                        .padding(horizontal = 12.dp, vertical = 7.dp)
-                ) {
-                    Text(prompt, color = CyberColors.TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            items(quickPrompts) { qp ->
+                GlassActionPill(
+                    text = qp,
+                    selected = false,
+                    activeColor = AttendoColors.Cyan,
+                    icon = if (qp.contains("Recover")) Icons.Rounded.RestoreFromTrash else Icons.Rounded.Bolt,
+                    onClick = { vm.sendAiChat(qp) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Chat List
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(messages, key = { it.id }) { msg ->
+                ChatBubble(msg)
+            }
+            if (aiLoading) {
+                item {
+                    GlassCard(
+                        cornerRadius = 18.dp,
+                        accentColor = AttendoColors.Indigo,
+                        contentPadding = PaddingValues(12.dp)
+                    ) {
+                        Text(
+                            "Thinking on-device...",
+                            color = AttendoColors.Cyan,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
         }
 
-        // Input Bar
+        // Floating Glass Input Bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(CyberColors.GlassCard)
-                .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 96.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color(0x22FFFFFF))
+                .border(0.85.dp, AttendoColors.GlassBorderTop, RoundedCornerShape(24.dp))
+                .padding(horizontal = 14.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            OutlinedTextField(
-                value = input,
-                onValueChange = { input = it },
-                placeholder = { Text("Ask Proxy anything...", color = CyberColors.TextMuted, fontSize = 13.sp) },
+            TextField(
+                value = prompt,
+                onValueChange = { prompt = it },
+                placeholder = {
+                    Text(
+                        "Ask Attendo Copilot — control anything or recover data...",
+                        color = AttendoColors.TextMuted,
+                        fontSize = 13.sp
+                    )
+                },
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    focusedTextColor = AttendoColors.TextPrimary,
+                    unfocusedTextColor = AttendoColors.TextPrimary
+                ),
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(16.dp),
                 maxLines = 3
             )
-            Spacer(Modifier.width(8.dp))
-            IconButton(
-                onClick = {
-                    val q = input
-                    input = ""
-                    vm.sendAiChat(q)
-                },
-                enabled = input.isNotBlank() && !loading,
+            Box(
                 modifier = Modifier
-                    .size(46.dp)
-                    .clip(CircleShape)
-                    .background(if (input.isNotBlank() && !loading) CyberColors.ElectricViolet else CyberColors.GlassSurface)
-            ) {
-                Icon(Icons.Rounded.ArrowUpward, "Send", tint = Color.White)
-            }
-        }
-    }
-
-    if (showSearchDialog) {
-        var q by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { showSearchDialog = false },
-            containerColor = CyberColors.GlassSurface,
-            title = { Text("⚡ Needle 3 Semantic Search", color = CyberColors.NeonCyan, fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(
-                            value = q,
-                            onValueChange = { q = it },
-                            label = { Text("Search subjects & tasks offline") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Button(onClick = { vm.semanticSearch(q) }) { Text("Go") }
-                    }
-                    for (i in 0 until searchResults.length()) {
-                        val item = searchResults.getJSONObject(i)
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(item.optString("title"), color = CyberColors.TextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                Text(item.optString("detail"), color = CyberColors.TextMuted, fontSize = 11.sp)
-                            }
-                            StatusPill(item.optString("kind"), CyberColors.ElectricViolet)
+                    .size(42.dp)
+                    .physicsPressable(scaleDown = 0.88f) {
+                        if (prompt.isNotBlank()) {
+                            vm.sendAiChat(prompt)
+                            prompt = ""
                         }
                     }
-                }
-            },
-            confirmButton = { TextButton(onClick = { showSearchDialog = false }) { Text("Close") } }
-        )
+                    .clip(CircleShape)
+                    .background(
+                        Brush.linearGradient(listOf(AttendoColors.Indigo, AttendoColors.Cyan))
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Rounded.Send,
+                    contentDescription = "Send",
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
     }
 }
 
@@ -217,127 +214,52 @@ private fun ChatBubble(msg: ChatMsg) {
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
     ) {
-        if (isUser) {
-            Box(
-                modifier = Modifier
-                    .widthIn(max = 290.dp)
-                    .clip(RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp))
-                    .background(CyberColors.ElectricViolet)
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
-            ) {
-                Text(msg.content, color = Color.White, fontSize = 14.sp)
-            }
-        } else {
-            CyberBentoCard(
-                modifier = Modifier.fillMaxWidth(0.95f),
-                borderColor = CyberColors.NeonCyan.copy(alpha = 0.35f)
-            ) {
-                RichMarkdownRenderer(msg.content)
+        GlassCard(
+            cornerRadius = 20.dp,
+            accentColor = if (isUser) AttendoColors.Indigo else null,
+            contentPadding = PaddingValues(14.dp),
+            modifier = Modifier.widthIn(max = 330.dp)
+        ) {
+            Text(
+                text = msg.content.replace("**", "").replace("### ", ""),
+                color = AttendoColors.TextPrimary,
+                fontSize = 13.sp,
+                lineHeight = 19.sp
+            )
 
-                msg.actionCard?.let { card ->
-                    Spacer(Modifier.height(10.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(CyberColors.ObsidianBg)
-                            .border(1.dp, CyberColors.ElectricViolet.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
-                            .padding(10.dp)
-                    ) {
-                        Column {
-                            Text("⚡ ${card.optString("title")}", color = CyberColors.NeonCyan, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
-                            Text(card.optString("description"), color = CyberColors.TextSecondary, fontSize = 11.sp)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * Clean native Markdown Table, Heading, Callout & Bullet renderer for mobile readability.
- */
-@Composable
-private fun RichMarkdownRenderer(markdown: String) {
-    val lines = markdown.split("\n")
-    var i = 0
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        while (i < lines.size) {
-            val line = lines[i].trim()
-            if (line.startsWith("|") && i + 1 < lines.size && lines[i + 1].trim().startsWith("|")) {
-                // Parse Markdown Table cleanly
-                val tableRows = mutableListOf<List<String>>()
-                while (i < lines.size && lines[i].trim().startsWith("|")) {
-                    val rowLine = lines[i].trim()
-                    if (!rowLine.replace("|", "").replace("-", "").replace(":", "").isBlank()) {
-                        val cells = rowLine.trim('|').split('|').map { it.trim().replace("**", "") }
-                        tableRows.add(cells)
-                    }
-                    i++
-                }
-                if (tableRows.isNotEmpty()) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(CyberColors.ObsidianBg)
-                            .border(1.dp, CyberColors.CyberBorder, RoundedCornerShape(10.dp))
-                    ) {
-                        tableRows.forEachIndexed { rIdx, row ->
-                            val isHeader = rIdx == 0
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(if (isHeader) CyberColors.ElectricViolet.copy(alpha = 0.22f) else Color.Transparent)
-                                    .padding(horizontal = 8.dp, vertical = 6.dp)
-                            ) {
-                                row.forEach { cell ->
-                                    Text(
-                                        text = cell,
-                                        color = if (isHeader) CyberColors.NeonCyan else CyberColors.TextPrimary,
-                                        fontSize = 11.sp,
-                                        fontWeight = if (isHeader) FontWeight.ExtraBold else FontWeight.Normal,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                continue
-            } else if (line.startsWith("### ")) {
-                Text(
-                    text = line.removePrefix("### ").replace("**", ""),
-                    color = CyberColors.NeonCyan,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.ExtraBold
-                )
-            } else if (line.startsWith("> ")) {
-                Box(
+            msg.actionCard?.let { card ->
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(CyberColors.Cancelled.copy(alpha = 0.12f))
-                        .border(1.dp, CyberColors.Cancelled.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
-                        .padding(8.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(AttendoColors.Emerald.copy(alpha = 0.16f))
+                        .border(0.8.dp, AttendoColors.Emerald.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+                        .padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = line.removePrefix("> ").replace("**", ""),
-                        color = CyberColors.TextPrimary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
+                    Icon(
+                        Icons.Rounded.Bolt,
+                        contentDescription = null,
+                        tint = AttendoColors.Emerald,
+                        modifier = Modifier.size(18.dp)
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            card.optString("title"),
+                            color = AttendoColors.TextPrimary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            card.optString("description"),
+                            color = AttendoColors.TextSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
                 }
-            } else if (line.isNotEmpty()) {
-                Text(
-                    text = line.replace("**", ""),
-                    color = CyberColors.TextPrimary,
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp
-                )
             }
-            i++
         }
     }
 }
