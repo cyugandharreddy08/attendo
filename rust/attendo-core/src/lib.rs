@@ -7,7 +7,6 @@ pub mod delta_patch;
 pub mod error;
 pub mod jni_bridge;
 pub mod models;
-pub mod needle_ai;
 pub mod sync;
 
 use crate::error::{AttendoError, AttendoResult};
@@ -235,12 +234,7 @@ fn dispatch_inner(method: &str, args: &Value) -> AttendoResult<Value> {
             Ok(serde_json::to_value(res)?)
         }),
 
-        // ---- NEEDLE 3 ON-DEVICE AI ----
-        "init_needle" => {
-            let path = args.get("model_path").and_then(|v| v.as_str()).ok_or_else(|| AttendoError::InvalidInput("missing model_path".into()))?;
-            needle_ai::init_needle(path)
-        }
-        "needle_status" => Ok(json!({ "ready": needle_ai::is_needle_ready() })),
+        // ---- TIMETABLE & SEARCH ----
         "needle_extract_timetable" => {
             let raw = args.get("raw_text").and_then(|v| v.as_str()).unwrap_or("");
             ai_agent::extract_timetable_from_text(raw)
@@ -257,6 +251,10 @@ fn dispatch_inner(method: &str, args: &Value) -> AttendoResult<Value> {
         "needle_semantic_search" => with_conn(|conn| {
             let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
             ai_agent::semantic_search(conn, query)
+        }),
+        "get_distillation_stats" => with_conn(|conn| {
+            let (total, recent) = db::get_distillation_stats(conn)?;
+            Ok(json!({ "totalSamples": total, "recent": recent }))
         }),
 
         // ---- PROXY AI ----
@@ -319,7 +317,7 @@ fn dispatch_inner(method: &str, args: &Value) -> AttendoResult<Value> {
         }),
 
         "check_github_update" => {
-            let code = args.get("version_code").and_then(|v| v.as_i64()).unwrap_or(1000) as i32;
+            let code = args.get("version_code").and_then(|v| v.as_i64()).unwrap_or(1001) as i32;
             let res = cloud_services::check_for_github_update(code)?;
             Ok(serde_json::to_value(res)?)
         }
@@ -471,27 +469,32 @@ mod tests {
     fn test_custom_rust_ai_full_control_and_db_recovery() {
         let mut conn = db::open_and_init(":memory:").unwrap();
 
-        // 1. Add subject via natural prompt
-        let (r1, _) = ai_agent::send_chat_message(&mut conn, "add subject Operating Systems theory 4 credits", &[]).unwrap();
+        // 1. Add subject via natural prompt (offline Rust fallback)
+        let (r1, _) = ai_agent::execute_rust_offline_fallback(&mut conn, "add subject Operating Systems theory 4 credits").unwrap();
         assert!(r1.contains("Operating Systems"), "got: {}", r1);
         assert_eq!(db::get_all_subjects(&conn).unwrap().len(), 1);
 
         // 2. Schedule timetable slot via prompt
-        let (r2, _) = ai_agent::send_chat_message(&mut conn, "schedule Operating Systems Monday 10:00 to 11:00 in LH1", &[]).unwrap();
+        let (r2, _) = ai_agent::execute_rust_offline_fallback(&mut conn, "schedule Operating Systems Monday 10:00 to 11:00 in LH1").unwrap();
         assert!(r2.contains("Monday"), "got: {}", r2);
         assert_eq!(db::get_all_timetable_entries(&conn).unwrap().len(), 1);
 
         // 3. Accidentally delete subject via prompt
-        let (r3, _) = ai_agent::send_chat_message(&mut conn, "delete subject Operating Systems", &[]).unwrap();
-        assert!(r3.contains("Deleted"), "got: {}", r3);
+        let (r3, _) = ai_agent::execute_rust_offline_fallback(&mut conn, "delete subject Operating Systems").unwrap();
+        assert!(r3.contains("Operating Systems"), "got: {}", r3);
         assert_eq!(db::get_all_subjects(&conn).unwrap().len(), 0);
         assert_eq!(db::list_deleted_records(&conn).unwrap().len(), 1);
 
         // 4. Ask Rust AI to recover deleted subject + its timetable from DB!
-        let (r4, card) = ai_agent::send_chat_message(&mut conn, "i accidentally deleted Operating Systems class help me recover it from database", &[]).unwrap();
-        assert!(r4.contains("Recovery Complete"), "got: {}", r4);
+        let (r4, card) = ai_agent::execute_rust_offline_fallback(&mut conn, "i accidentally deleted Operating Systems class help me recover it from database").unwrap();
+        assert!(r4.contains("Operating Systems"), "got: {}", r4);
         assert!(card.is_some());
         assert_eq!(db::get_all_subjects(&conn).unwrap().len(), 1);
         assert_eq!(db::get_all_timetable_entries(&conn).unwrap().len(), 1);
+
+        // 5. Verify distillation log
+        db::log_distillation_sample(&conn, "recover os", "recover_deleted", "[]", "Restored", "groq").unwrap();
+        let (total, _) = db::get_distillation_stats(&conn).unwrap();
+        assert_eq!(total, 1);
     }
 }

@@ -48,7 +48,7 @@ fun SettingsAndHubScreen(vm: AttendoViewModel) {
         item {
             Column {
                 Text("Hub & Vault", color = AttendoColors.TextPrimary, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
-                Text("Attendo v10.0.0 • Pure Rust Neural Core", color = AttendoColors.Cyan, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text("Attendo v10.0.1 • Groq + Rust Copilot", color = AttendoColors.Cyan, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             }
         }
 

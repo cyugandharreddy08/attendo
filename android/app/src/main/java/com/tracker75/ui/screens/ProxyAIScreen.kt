@@ -92,7 +92,7 @@ fun ProxyAIScreen(vm: AttendoViewModel) {
                         fontWeight = FontWeight.ExtraBold
                     )
                     Text(
-                        "Pure Rust Transformer • 100% Offline",
+                        "Groq Live + Rust Distillation Engine",
                         color = AttendoColors.Emerald,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold

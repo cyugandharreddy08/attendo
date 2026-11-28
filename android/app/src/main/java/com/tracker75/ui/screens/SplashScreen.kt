@@ -61,7 +61,7 @@ fun CyberSplashScreen(onFinished: () -> Unit) {
                 shape = RoundedCornerShape(20.dp)
             ) {
                 Text(
-                    text = "v10.0.0 • PURE RUST NEURAL CORE",
+                    text = "v10.0.1 • GROQ + RUST COPILOT",
                     color = AttendoColors.Cyan,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,

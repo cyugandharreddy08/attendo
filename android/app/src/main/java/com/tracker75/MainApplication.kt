@@ -5,12 +5,6 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
 import com.tracker75.core.AttendoCore
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import org.json.JSONObject
-import java.io.File
-import java.io.FileOutputStream
 
 class MainApplication : Application() {
     override fun onCreate() {
@@ -19,28 +13,6 @@ class MainApplication : Application() {
         val dbFile = getDatabasePath("tracker75.db")
         dbFile.parentFile?.mkdirs()
         AttendoCore.init(dbFile.absolutePath)
-
-        // Extract and initialize on-device Needle 3 (33.7 MB) in background
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                System.loadLibrary("cactus_engine")
-            } catch (_: UnsatisfiedLinkError) {
-                // Non-arm64 fallback handled gracefully
-            }
-            try {
-                val modelFile = File(filesDir, "needle3.cact")
-                if (!modelFile.exists() || modelFile.length() < 1_000_000L) {
-                    assets.open("needle3.cact").use { input ->
-                        FileOutputStream(modelFile).use { output ->
-                            input.copyTo(output, 64 * 1024)
-                        }
-                    }
-                }
-                AttendoCore.invoke("init_needle", JSONObject().put("model_path", modelFile.absolutePath))
-            } catch (_: Exception) {
-                // Graceful fallback to deterministic parser / cloud AI
-            }
-        }
     }
 
     private fun createNotificationChannels() {

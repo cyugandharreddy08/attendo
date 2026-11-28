@@ -105,6 +105,16 @@ CREATE TABLE IF NOT EXISTS deleted_audit_log (
     restored INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS ai_distillation_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    prompt TEXT NOT NULL,
+    intent_name TEXT NOT NULL,
+    tool_calls_json TEXT NOT NULL,
+    response_text TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'groq',
+    created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_instances_date ON lecture_instances(date);
 CREATE INDEX IF NOT EXISTS idx_instances_subj ON lecture_instances(subject_id);
 CREATE INDEX IF NOT EXISTS idx_timetable_day ON timetable(day_of_week);
@@ -1193,4 +1203,46 @@ pub fn undo_last_attendance_edit(conn: &Connection) -> AttendoResult<String> {
         new_status,
         old_status.as_deref().unwrap_or("unmarked")
     ))
+}
+
+// ==================== GROQ -> RUST AI DISTILLATION DATASET ====================
+
+pub fn log_distillation_sample(
+    conn: &Connection,
+    prompt: &str,
+    intent_name: &str,
+    tool_calls_json: &str,
+    response_text: &str,
+    source: &str,
+) -> AttendoResult<()> {
+    let now = Local::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO ai_distillation_log (prompt, intent_name, tool_calls_json, response_text, source, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![prompt, intent_name, tool_calls_json, response_text, source, now],
+    )?;
+    Ok(())
+}
+
+pub fn get_distillation_stats(conn: &Connection) -> AttendoResult<(i64, Vec<serde_json::Value>)> {
+    let total: i64 = conn.query_row("SELECT COUNT(*) FROM ai_distillation_log", [], |r| r.get(0))?;
+    let mut stmt = conn.prepare(
+        "SELECT id, prompt, intent_name, tool_calls_json, source, created_at
+         FROM ai_distillation_log ORDER BY id DESC LIMIT 100",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok(serde_json::json!({
+            "id": r.get::<_, i64>(0)?,
+            "prompt": r.get::<_, String>(1)?,
+            "intent": r.get::<_, String>(2)?,
+            "toolCalls": r.get::<_, String>(3)?,
+            "source": r.get::<_, String>(4)?,
+            "createdAt": r.get::<_, String>(5)?,
+        }))
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok((total, out))
 }
