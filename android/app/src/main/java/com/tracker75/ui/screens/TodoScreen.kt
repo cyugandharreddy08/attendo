@@ -39,6 +39,7 @@ fun TodoScreen(vm: AttendoViewModel) {
 
     var filterPriority by remember { mutableStateOf("all") }
     var showAddTodo by remember { mutableStateOf(false) }
+    var showNoticeExtract by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier
@@ -57,14 +58,22 @@ fun TodoScreen(vm: AttendoViewModel) {
                     Text("TASKS & DEADLINES", color = CyberColors.NeonCyan, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.4.sp)
                     Text("To-Do Shield", color = CyberColors.TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Black)
                 }
-                Button(
-                    onClick = { showAddTodo = true },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = CyberColors.ElectricViolet)
-                ) {
-                    Icon(Icons.Rounded.Add, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Task", fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = { showNoticeExtract = true },
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("✨ Notice", color = CyberColors.NeonCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Button(
+                        onClick = { showAddTodo = true },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = CyberColors.ElectricViolet)
+                    ) {
+                        Icon(Icons.Rounded.Add, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Task", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -161,6 +170,40 @@ fun TodoScreen(vm: AttendoViewModel) {
                 vm.addTodo(title, subjId, due, time, prio, 15, notes)
                 showAddTodo = false
             }
+        )
+    }
+
+    if (showNoticeExtract) {
+        var rawNotice by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showNoticeExtract = false },
+            containerColor = CyberColors.GlassSurface,
+            title = { Text("⚡ Needle 3 Notice-to-Tasks", color = CyberColors.NeonCyan, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Paste any WhatsApp announcement or syllabus notice. Needle 3 extracts tasks & priorities offline.",
+                        color = CyberColors.TextSecondary,
+                        fontSize = 12.sp
+                    )
+                    OutlinedTextField(
+                        value = rawNotice,
+                        onValueChange = { rawNotice = it },
+                        placeholder = { Text("Submit OS Lab record by Friday\nPrepare for DBMS Quiz next week", fontSize = 11.sp) },
+                        minLines = 4
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        vm.extractAndAddTodos(rawNotice)
+                        showNoticeExtract = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CyberColors.ElectricViolet)
+                ) { Text("Extract Tasks") }
+            },
+            dismissButton = { TextButton(onClick = { showNoticeExtract = false }) { Text("Cancel") } }
         )
     }
 }

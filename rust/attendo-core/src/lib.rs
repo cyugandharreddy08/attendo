@@ -5,6 +5,7 @@ pub mod db;
 pub mod error;
 pub mod jni_bridge;
 pub mod models;
+pub mod needle_ai;
 pub mod sync;
 
 use crate::error::{AttendoError, AttendoResult};
@@ -230,6 +231,30 @@ fn dispatch_inner(method: &str, args: &Value) -> AttendoResult<Value> {
             let mode = args.get("mode").and_then(|v| v.as_str()).unwrap_or("merge");
             let res = sync::restore_from_cloud(conn, code, mode)?;
             Ok(serde_json::to_value(res)?)
+        }),
+
+        // ---- NEEDLE 3 ON-DEVICE AI ----
+        "init_needle" => {
+            let path = args.get("model_path").and_then(|v| v.as_str()).ok_or_else(|| AttendoError::InvalidInput("missing model_path".into()))?;
+            needle_ai::init_needle(path)
+        }
+        "needle_status" => Ok(json!({ "ready": needle_ai::is_needle_ready() })),
+        "needle_extract_timetable" => {
+            let raw = args.get("raw_text").and_then(|v| v.as_str()).unwrap_or("");
+            ai_agent::extract_timetable_from_text(raw)
+        }
+        "import_extracted_timetable" => with_conn(|conn| {
+            let slots = args.get("slots").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+            let count = ai_agent::import_extracted_timetable(conn, &slots)?;
+            Ok(json!({ "imported": count }))
+        }),
+        "needle_extract_todos" => {
+            let raw = args.get("raw_text").and_then(|v| v.as_str()).unwrap_or("");
+            ai_agent::extract_todos_from_text(raw)
+        }
+        "needle_semantic_search" => with_conn(|conn| {
+            let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
+            ai_agent::semantic_search(conn, query)
         }),
 
         // ---- PROXY AI ----

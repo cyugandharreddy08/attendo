@@ -11,8 +11,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -44,8 +45,15 @@ fun ProxyAIScreen(
 ) {
     val messages by vm.chatMessages.collectAsState()
     val loading by vm.aiLoading.collectAsState()
+    val needleReady by vm.needleReady.collectAsState()
+    val searchResults by vm.searchResults.collectAsState()
     var input by remember { mutableStateOf("") }
+    var showSearchDialog by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
+
+    LaunchedEffect(Unit) {
+        vm.refreshNeedleStatus()
+    }
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
@@ -69,7 +77,7 @@ fun ProxyAIScreen(
         ) {
             if (onBack != null) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.Rounded.ArrowBack, "Back", tint = CyberColors.TextPrimary)
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = CyberColors.TextPrimary)
                 }
             }
             Text("🤖", fontSize = 22.sp)
@@ -78,9 +86,15 @@ fun ProxyAIScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Proxy AI", color = CyberColors.TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Black)
                     Spacer(Modifier.width(8.dp))
-                    StatusPill("RUST ENGINE", CyberColors.NeonCyan)
+                    StatusPill(
+                        if (needleReady) "NEEDLE 3 OFFLINE" else "HYBRID AI",
+                        if (needleReady) CyberColors.Present else CyberColors.NeonCyan
+                    )
                 }
-                Text("24/7 Attendance Wingman • Live Tool Execution", color = CyberColors.TextSecondary, fontSize = 11.sp)
+                Text("On-Device Needle 3 + Cloud Wingman", color = CyberColors.TextSecondary, fontSize = 11.sp)
+            }
+            IconButton(onClick = { showSearchDialog = true }) {
+                Icon(Icons.Rounded.Search, "Semantic Search", tint = CyberColors.NeonCyan)
             }
         }
 
@@ -158,6 +172,41 @@ fun ProxyAIScreen(
                 Icon(Icons.Rounded.ArrowUpward, "Send", tint = Color.White)
             }
         }
+    }
+
+    if (showSearchDialog) {
+        var q by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showSearchDialog = false },
+            containerColor = CyberColors.GlassSurface,
+            title = { Text("⚡ Needle 3 Semantic Search", color = CyberColors.NeonCyan, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = q,
+                            onValueChange = { q = it },
+                            label = { Text("Search subjects & tasks offline") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Button(onClick = { vm.semanticSearch(q) }) { Text("Go") }
+                    }
+                    for (i in 0 until searchResults.length()) {
+                        val item = searchResults.getJSONObject(i)
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(item.optString("title"), color = CyberColors.TextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text(item.optString("detail"), color = CyberColors.TextMuted, fontSize = 11.sp)
+                            }
+                            StatusPill(item.optString("kind"), CyberColors.ElectricViolet)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showSearchDialog = false }) { Text("Close") } }
+        )
     }
 }
 

@@ -1,7 +1,8 @@
 use crate::attendance_engine;
 use crate::db;
 use crate::error::{AttendoError, AttendoResult};
-use crate::models::{AIActionCardData, ChatMessage};
+use crate::models::{AIActionCardData, ChatMessage, SubjectInput, TimetableEntryInput};
+use crate::needle_ai;
 use chrono::{Datelike, Duration, Local, NaiveDate};
 use rusqlite::Connection;
 use serde_json::{json, Value};
@@ -479,6 +480,43 @@ pub fn send_chat_message(
     user_prompt: &str,
     history: &[ChatMessage],
 ) -> AttendoResult<(String, Option<AIActionCardData>)> {
+    // 1. Try on-device Needle 3 first for instant, 100% offline tool execution
+    if needle_ai::is_needle_ready() {
+        let msgs = json!([
+            { "role": "system", "content": "You are Proxy, Attendo's local attendance assistant. Pick the exact tool for the user's request." },
+            { "role": "user", "content": user_prompt }
+        ]);
+        let flat_tools: Vec<Value> = tool_definitions()
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|t| t.get("function").cloned())
+            .collect();
+
+        if let Ok(res) = needle_ai::needle_complete(&msgs, Some(&Value::Array(flat_tools)), 256) {
+            let confidence = res.get("confidence").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            if let Some(calls) = res.get("function_calls").and_then(|v| v.as_array()) {
+                if !calls.is_empty() && confidence >= 0.55 {
+                    let mut outputs = Vec::new();
+                    let mut card_out: Option<AIActionCardData> = None;
+                    for c in calls {
+                        let fn_name = c.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                        let args = c.get("arguments").cloned().unwrap_or(json!({}));
+                        let (tool_res, card) = execute_tool(conn, fn_name, &args);
+                        if card.is_some() {
+                            card_out = card;
+                        }
+                        outputs.push((fn_name.to_string(), tool_res));
+                    }
+                    let summary = format_offline_tool_response(&outputs, confidence);
+                    return Ok((summary, card_out));
+                }
+            }
+        }
+    }
+
+    // 2. Cloud Groq fallback for rich conversational reasoning
     let api_key = get_active_api_key(conn);
     let primary_model = get_active_model(conn);
     let models = [
@@ -578,4 +616,321 @@ pub fn send_chat_message(
         "Proxy AI unreachable: {}",
         last_err
     )))
+}
+
+fn format_offline_tool_response(outputs: &[(String, String)], confidence: f64) -> String {
+    let mut out = format!(
+        "### ⚡ Needle 3 On-Device AI ({:.0}% confidence)\n\n",
+        confidence * 100.0
+    );
+    for (name, raw_json) in outputs {
+        let parsed: Value = serde_json::from_str(raw_json).unwrap_or(json!({}));
+        match name.as_str() {
+            "get_attendance_summary" => {
+                if let Some(ov) = parsed.get("overall") {
+                    out.push_str(&format!(
+                        "> 🛡️ **Overall Attendance**: **{}%** — {}\n\n",
+                        ov.get("percent").and_then(|v| v.as_i64()).unwrap_or(0),
+                        ov.get("statusMessage").and_then(|v| v.as_str()).unwrap_or("")
+                    ));
+                }
+                if let Some(subjs) = parsed.get("subjects").and_then(|v| v.as_array()) {
+                    if !subjs.is_empty() {
+                        out.push_str("| Subject | % | Status |\n|---|---|---|\n");
+                        for s in subjs {
+                            out.push_str(&format!(
+                                "| {} | {}% | {} |\n",
+                                s.get("name").and_then(|v| v.as_str()).unwrap_or(""),
+                                s.get("percent").and_then(|v| v.as_i64()).unwrap_or(0),
+                                s.get("status").and_then(|v| v.as_str()).unwrap_or("")
+                            ));
+                        }
+                    }
+                }
+            }
+            "get_schedule" => {
+                let date = parsed.get("date").and_then(|v| v.as_str()).unwrap_or("");
+                let day = parsed.get("day").and_then(|v| v.as_str()).unwrap_or("");
+                out.push_str(&format!("### 📅 {} ({})\n\n", day, date));
+                if let Some(classes) = parsed.get("classes").and_then(|v| v.as_array()) {
+                    if classes.is_empty() {
+                        out.push_str("🌴 No classes scheduled for this day.\n");
+                    } else {
+                        out.push_str("| Time | Subject | Room |\n|---|---|---|\n");
+                        for c in classes {
+                            out.push_str(&format!(
+                                "| {} – {} | {} | {} |\n",
+                                c.get("start_time").and_then(|v| v.as_str()).unwrap_or(""),
+                                c.get("end_time").and_then(|v| v.as_str()).unwrap_or(""),
+                                c.get("subject_name").and_then(|v| v.as_str()).unwrap_or("Subject"),
+                                c.get("room").and_then(|v| v.as_str()).unwrap_or("-")
+                            ));
+                        }
+                    }
+                }
+            }
+            _ => {
+                out.push_str(&format!("Executed **{}** locally offline.\n", name));
+            }
+        }
+    }
+    out
+}
+
+/// Uses Needle 3 (or deterministic local parser fallback) to extract structured timetable slots from messy pasted text.
+pub fn extract_timetable_from_text(raw_text: &str) -> AttendoResult<Value> {
+    if needle_ai::is_needle_ready() {
+        let msgs = json!([
+            {
+                "role": "system",
+                "content": "Extract every class slot from the timetable text using extract_timetable_slots."
+            },
+            { "role": "user", "content": raw_text }
+        ]);
+        let tools = json!([{
+            "name": "extract_timetable_slots",
+            "description": "Extract structured college timetable entries from raw text.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "slots": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "subject": { "type": "string" },
+                                "day": { "type": "string" },
+                                "start_time": { "type": "string" },
+                                "end_time": { "type": "string" },
+                                "room": { "type": "string" },
+                                "subject_type": { "type": "string", "enum": ["theory", "lab"] }
+                            },
+                            "required": ["subject", "day", "start_time", "end_time"]
+                        }
+                    }
+                },
+                "required": ["slots"]
+            }
+        }]);
+
+        if let Ok(res) = needle_ai::needle_complete(&msgs, Some(&tools), 512) {
+            if let Some(calls) = res.get("function_calls").and_then(|v| v.as_array()) {
+                if let Some(slots) = calls.first().and_then(|c| c.pointer("/arguments/slots")) {
+                    return Ok(json!({ "source": "needle3", "slots": slots }));
+                }
+            }
+        }
+    }
+
+    // Fast deterministic line parser fallback (e.g. "Monday 09:00-10:00 Operating Systems LH-1")
+    let days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+    let mut slots = Vec::new();
+    let mut current_day = "Monday".to_string();
+
+    for line in raw_text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() { continue; }
+        let lower = trimmed.to_lowercase();
+        if let Some(d) = days.iter().find(|&&d| lower.starts_with(d) || lower.contains(d)) {
+            let mut ch = d.chars();
+            if let Some(first) = ch.next() {
+                current_day = first.to_uppercase().to_string() + ch.as_str();
+            }
+        }
+        // Look for HH:MM-HH:MM or HH:MM - HH:MM
+        let tokens: Vec<&str> = trimmed.split_whitespace().collect();
+        let mut times: Vec<String> = Vec::new();
+        let mut words: Vec<&str> = Vec::new();
+        for tok in tokens {
+            let cleaned = tok.trim_matches(|c: char| c == ',' || c == ';');
+            if cleaned.contains(':') && cleaned.len() <= 11 {
+                if let Some((a, b)) = cleaned.split_once('-') {
+                    times.push(a.trim().to_string());
+                    times.push(b.trim().to_string());
+                } else {
+                    times.push(cleaned.to_string());
+                }
+            } else if !days.iter().any(|d| cleaned.eq_ignore_ascii_case(d)) && cleaned != "-" && cleaned != "to" {
+                words.push(cleaned);
+            }
+        }
+        if times.len() >= 2 && !words.is_empty() {
+            let subj_name = words.join(" ");
+            let is_lab = subj_name.to_lowercase().contains("lab");
+            slots.push(json!({
+                "subject": subj_name,
+                "day": current_day,
+                "start_time": times[0],
+                "end_time": times[1],
+                "room": "",
+                "subject_type": if is_lab { "lab" } else { "theory" }
+            }));
+        }
+    }
+
+    Ok(json!({ "source": "local_parser", "slots": slots }))
+}
+
+pub fn import_extracted_timetable(conn: &Connection, slots: &[Value]) -> AttendoResult<usize> {
+    let existing = db::get_all_subjects(conn)?;
+    let mut imported = 0;
+
+    for slot in slots {
+        let subj_name = match slot.get("subject").and_then(|v| v.as_str()) {
+            Some(s) if !s.trim().is_empty() => s.trim(),
+            _ => continue,
+        };
+        let day = slot.get("day").and_then(|v| v.as_str()).unwrap_or("Monday");
+        let start = slot.get("start_time").and_then(|v| v.as_str()).unwrap_or("09:00");
+        let end = slot.get("end_time").and_then(|v| v.as_str()).unwrap_or("10:00");
+        let room = slot.get("room").and_then(|v| v.as_str()).unwrap_or("");
+        let stype = slot.get("subject_type").and_then(|v| v.as_str()).unwrap_or("theory");
+
+        let subj_id = if let Some(found) = existing.iter().find(|s| s.name.eq_ignore_ascii_case(subj_name)) {
+            found.id
+        } else {
+            // Check fresh DB in case added in earlier iteration
+            let fresh = db::get_all_subjects(conn)?;
+            if let Some(f2) = fresh.iter().find(|s| s.name.eq_ignore_ascii_case(subj_name)) {
+                f2.id
+            } else {
+                db::add_subject(
+                    conn,
+                    &SubjectInput {
+                        name: subj_name.to_string(),
+                        color: "#8B5CF6".into(),
+                        target_percent: 75,
+                        subject_type: stype.to_string(),
+                        is_frozen: 0,
+                        past_attended: 0,
+                        past_total: 0,
+                        credits: if stype == "lab" { 2 } else { 3 },
+                    },
+                )?
+            }
+        };
+
+        db::add_timetable_entry(
+            conn,
+            &TimetableEntryInput {
+                subject_id: subj_id,
+                day_of_week: day.to_string(),
+                start_time: start.to_string(),
+                end_time: end.to_string(),
+                room: room.to_string(),
+            },
+        )?;
+        imported += 1;
+    }
+
+    Ok(imported)
+}
+
+/// Uses Needle 3 to extract structured tasks from college notices / announcements offline.
+pub fn extract_todos_from_text(raw_text: &str) -> AttendoResult<Value> {
+    let today = Local::now().format("%Y-%m-%d").to_string();
+    if needle_ai::is_needle_ready() {
+        let msgs = json!([
+            {
+                "role": "system",
+                "content": format!("Today is {}. Extract actionable student tasks/deadlines using extract_tasks.", today)
+            },
+            { "role": "user", "content": raw_text }
+        ]);
+        let tools = json!([{
+            "name": "extract_tasks",
+            "description": "Extract tasks and deadlines from a notice or message.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tasks": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "title": { "type": "string" },
+                                "due_date": { "type": "string" },
+                                "priority": { "type": "string", "enum": ["high", "medium", "low"] }
+                            },
+                            "required": ["title", "due_date", "priority"]
+                        }
+                    }
+                },
+                "required": ["tasks"]
+            }
+        }]);
+
+        if let Ok(res) = needle_ai::needle_complete(&msgs, Some(&tools), 512) {
+            if let Some(calls) = res.get("function_calls").and_then(|v| v.as_array()) {
+                if let Some(tasks) = calls.first().and_then(|c| c.pointer("/arguments/tasks")) {
+                    return Ok(json!({ "source": "needle3", "tasks": tasks }));
+                }
+            }
+        }
+    }
+
+    // Fallback: split sentences into tasks
+    let tasks: Vec<Value> = raw_text
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .map(|l| {
+            let prio = if l.to_lowercase().contains("urgent") || l.to_lowercase().contains("exam") || l.to_lowercase().contains("submit") {
+                "high"
+            } else {
+                "medium"
+            };
+            json!({ "title": l, "due_date": today, "priority": prio })
+        })
+        .collect();
+    Ok(json!({ "source": "local_parser", "tasks": tasks }))
+}
+
+/// Offline semantic search across subjects, tasks, and notes using Needle 3 embeddings.
+pub fn semantic_search(conn: &Connection, query: &str) -> AttendoResult<Value> {
+    let subjects = db::get_all_subjects(conn)?;
+    let todos = db::get_all_todos(conn)?;
+
+    let mut docs: Vec<(String, String, String)> = Vec::new(); // (kind, title, text)
+    for s in subjects {
+        docs.push((
+            "Subject".into(),
+            s.name.clone(),
+            format!("Subject {} ({}) target {}%", s.name, s.subject_type, s.target_percent),
+        ));
+    }
+    for td in todos {
+        docs.push((
+            "Task".into(),
+            td.title.clone(),
+            format!("Task {} due {} priority {} {}", td.title, td.due_date, td.priority, td.notes),
+        ));
+    }
+
+    if needle_ai::is_needle_ready() {
+        if let Ok(q_vec) = needle_ai::needle_embed(query) {
+            let mut scored: Vec<(f32, Value)> = Vec::new();
+            for (kind, title, text) in &docs {
+                if let Ok(d_vec) = needle_ai::needle_embed(text) {
+                    let sim = needle_ai::cosine_similarity(&q_vec, &d_vec);
+                    scored.push((
+                        sim,
+                        json!({ "kind": kind, "title": title, "detail": text, "score": sim }),
+                    ));
+                }
+            }
+            scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+            let top: Vec<Value> = scored.into_iter().take(8).map(|(_, v)| v).collect();
+            return Ok(json!({ "engine": "needle3_embeddings", "results": top }));
+        }
+    }
+
+    let q_lower = query.trim().to_lowercase();
+    let matched: Vec<Value> = docs
+        .into_iter()
+        .filter(|(_, _, text)| q_lower.is_empty() || text.to_lowercase().contains(&q_lower))
+        .take(8)
+        .map(|(kind, title, text)| json!({ "kind": kind, "title": title, "detail": text, "score": 1.0 }))
+        .collect();
+    Ok(json!({ "engine": "keyword", "results": matched }))
 }

@@ -62,7 +62,7 @@ fun SettingsAndHubScreen(
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text("Settings & Hub", color = CyberColors.TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Black)
-                    Text("Rust Core v9.0.1 • Clean Obsidian UI", color = CyberColors.NeonCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("Rust Core v9.1.0 • Needle 3 Offline AI", color = CyberColors.NeonCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -173,7 +173,7 @@ fun SettingsAndHubScreen(
                 HorizontalDivider(color = CyberColors.CyberBorder, modifier = Modifier.padding(vertical = 8.dp))
                 SettingsItemRow("📜 Changelog & Release Notes", "What's new in Attendo v9.0.1") { showChangelogDialog = true }
                 HorizontalDivider(color = CyberColors.CyberBorder, modifier = Modifier.padding(vertical = 8.dp))
-                SettingsItemRow("🚀 Check for App Updates", "Current: v9.0.1 (Build 901)") { vm.checkForUpdate(silent = false) }
+                SettingsItemRow("🚀 Check for App Updates", "Current: v9.1.0 (Build 910)") { vm.checkForUpdate(silent = false) }
             }
         }
     }

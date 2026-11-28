@@ -39,6 +39,7 @@ fun SubjectsScreen(vm: AttendoViewModel) {
     val report = snapshot.optJSONObject("report")
 
     var showAddSubject by remember { mutableStateOf(false) }
+    var showAiPasteTimetable by remember { mutableStateOf(false) }
     var selectedSubject by remember { mutableStateOf<JSONObject?>(null) }
     var showSlotDialogFor by remember { mutableStateOf<JSONObject?>(null) }
 
@@ -59,14 +60,22 @@ fun SubjectsScreen(vm: AttendoViewModel) {
                     Text("SUBJECTS & SIMULATOR", color = CyberColors.NeonCyan, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.4.sp)
                     Text("Your Courses", color = CyberColors.TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Black)
                 }
-                Button(
-                    onClick = { showAddSubject = true },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = CyberColors.ElectricViolet)
-                ) {
-                    Icon(Icons.Rounded.Add, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Add", fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = { showAiPasteTimetable = true },
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("✨ AI Paste", color = CyberColors.NeonCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Button(
+                        onClick = { showAddSubject = true },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = CyberColors.ElectricViolet)
+                    ) {
+                        Icon(Icons.Rounded.Add, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Add", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -180,6 +189,40 @@ fun SubjectsScreen(vm: AttendoViewModel) {
                 vm.addOrUpdateSubject(null, name, "#8B5CF6", target, type, frozen, pastAtt, pastTot, credits)
                 showAddSubject = false
             }
+        )
+    }
+
+    if (showAiPasteTimetable) {
+        var rawSchedule by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showAiPasteTimetable = false },
+            containerColor = CyberColors.GlassSurface,
+            title = { Text("⚡ Needle 3 Timetable Extractor", color = CyberColors.NeonCyan, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Paste your college timetable or WhatsApp schedule text. Needle 3 extracts subjects & time slots 100% offline.",
+                        color = CyberColors.TextSecondary,
+                        fontSize = 12.sp
+                    )
+                    OutlinedTextField(
+                        value = rawSchedule,
+                        onValueChange = { rawSchedule = it },
+                        placeholder = { Text("Monday 09:00-10:00 Operating Systems\nTuesday 14:00-16:00 DBMS Lab", fontSize = 11.sp) },
+                        minLines = 4
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        vm.extractAndImportTimetable(rawSchedule)
+                        showAiPasteTimetable = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CyberColors.ElectricViolet)
+                ) { Text("Extract & Import") }
+            },
+            dismissButton = { TextButton(onClick = { showAiPasteTimetable = false }) { Text("Cancel") } }
         )
     }
 

@@ -65,6 +65,12 @@ class AttendoViewModel : ViewModel() {
     private val _downloadProgress = MutableStateFlow<Int?>(null)
     val downloadProgress: StateFlow<Int?> = _downloadProgress.asStateFlow()
 
+    private val _needleReady = MutableStateFlow(false)
+    val needleReady: StateFlow<Boolean> = _needleReady.asStateFlow()
+
+    private val _searchResults = MutableStateFlow(JSONArray())
+    val searchResults: StateFlow<JSONArray> = _searchResults.asStateFlow()
+
     private val _bannerMessage = MutableStateFlow<String?>(null)
     val bannerMessage: StateFlow<String?> = _bannerMessage.asStateFlow()
 
@@ -74,6 +80,69 @@ class AttendoViewModel : ViewModel() {
     init {
         refreshAll()
         checkForUpdate(silent = true)
+        refreshNeedleStatus()
+    }
+
+    fun refreshNeedleStatus() {
+        viewModelScope.launch {
+            AttendoCore.invoke("needle_status").onSuccess {
+                _needleReady.value = it.optBoolean("ready", false)
+            }
+        }
+    }
+
+    fun extractAndImportTimetable(rawText: String) {
+        if (rawText.isBlank()) return
+        viewModelScope.launch {
+            AttendoCore.invoke("needle_extract_timetable", JSONObject().put("raw_text", rawText))
+                .onSuccess { res ->
+                    val slots = res.optJSONArray("slots") ?: JSONArray()
+                    if (slots.length() == 0) {
+                        showBanner("No timetable slots detected in text")
+                    } else {
+                        AttendoCore.invoke("import_extracted_timetable", JSONObject().put("slots", slots))
+                            .onSuccess { imp ->
+                                val count = imp.optInt("imported", 0)
+                                showBanner("⚡ Extracted & imported $count classes (${res.optString("source")})!")
+                                refreshAll()
+                            }
+                    }
+                }
+        }
+    }
+
+    fun extractAndAddTodos(rawText: String) {
+        if (rawText.isBlank()) return
+        viewModelScope.launch {
+            AttendoCore.invoke("needle_extract_todos", JSONObject().put("raw_text", rawText))
+                .onSuccess { res ->
+                    val tasks = res.optJSONArray("tasks") ?: JSONArray()
+                    var added = 0
+                    for (i in 0 until tasks.length()) {
+                        val t = tasks.optJSONObject(i) ?: continue
+                        val p = JSONObject()
+                            .put("title", t.optString("title"))
+                            .put("subject_id", JSONObject.NULL)
+                            .put("due_date", t.optString("due_date"))
+                            .put("due_time", JSONObject.NULL)
+                            .put("priority", t.optString("priority", "medium"))
+                            .put("alarm_minutes_before", 15)
+                            .put("notes", "Extracted by Needle 3")
+                        if (AttendoCore.invoke("add_todo", p).isSuccess) added++
+                    }
+                    showBanner("⚡ Extracted & added $added tasks (${res.optString("source")})!")
+                    refreshDashboard()
+                }
+        }
+    }
+
+    fun semanticSearch(query: String) {
+        viewModelScope.launch {
+            AttendoCore.invoke("needle_semantic_search", JSONObject().put("query", query))
+                .onSuccess { res ->
+                    _searchResults.value = res.optJSONArray("results") ?: JSONArray()
+                }
+        }
     }
 
     fun clearBanner() {
@@ -446,11 +515,11 @@ class AttendoViewModel : ViewModel() {
 
     fun checkForUpdate(silent: Boolean = false) {
         viewModelScope.launch {
-            AttendoCore.invoke("check_github_update", JSONObject().put("version_code", 901)).onSuccess {
+            AttendoCore.invoke("check_github_update", JSONObject().put("version_code", 910)).onSuccess {
                 if (it.optBoolean("hasUpdate", false)) {
                     _updateInfo.value = it
                 } else if (!silent) {
-                    showBanner("You are on the latest version (v9.0.1)!")
+                    showBanner("You are on the latest version (v9.1.0)!")
                 }
             }.onFailure {
                 if (!silent) showBanner("Could not reach GitHub Releases")
